@@ -1,0 +1,127 @@
+# ===================================================================
+# eSMS-Sender — Application Configuration
+# ===================================================================
+
+spring:
+  application:
+    name: esms-sender
+
+  # --- RabbitMQ ---
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 20
+        concurrency: 5
+        max-concurrency: 20
+
+  # --- Redis (for gateway health state cache) ---
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+    time-zone: UTC
+
+# ===================================================================
+# Server
+# ===================================================================
+server:
+  port: ${APP_PORT_SENDER:8081}
+  error:
+    include-message: never
+    include-stacktrace: never
+
+# ===================================================================
+# Actuator
+# ===================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,ready,metrics,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# ===================================================================
+# Application — Sender-specific configuration
+# ===================================================================
+app:
+  sender:
+    # Gateway mode: dummy | ethiotelecom | safaricom
+    # In dev/CI, use "dummy" which writes to file and generates synthetic DLRs
+    active-gateways: ${ACTIVE_GATEWAYS:dummy}
+
+    concurrency:
+      ethio-telecom: ${SENDER_CONCURRENCY_ETHIO:20}
+      safaricom: ${SENDER_CONCURRENCY_SAFARICOM:20}
+
+    timeouts:
+      connect: PT5S
+      read: PT15S
+
+    retry:
+      max-attempts: 5
+      backoff-steps: "30s,2m,10m,1h"
+
+    dummy:
+      output-dir: ${DUMMY_OUTPUT_DIR:./dummy-sms-output}
+      simulate-dlr-delay: PT2S
+
+  gateway:
+    ethiotelecom:
+      base-url: ${ETHIO_BASE_URL:https://sms-gw.ethiotelecom.et/}
+      auth-token: ${ETHIO_AUTH_TOKEN:}
+      sender-id: ${ETHIO_SENDER_ID:NIB}
+      dlr-callback-url: ${ETHIO_DLR_URL:https://esms.nib.internal/sender/webhooks/ethiotelecom/dlr}
+
+    safaricom:
+      base-url: ${SAFARICOM_BASE_URL:https://sms-gw.safaricom.et/}
+      auth-token: ${SAFARICOM_AUTH_TOKEN:}
+      sender-id: ${SAFARICOM_SENDER_ID:NIB}
+      dlr-callback-url: ${SAFARICOM_DLR_URL:https://esms.nib.internal/sender/webhooks/safaricom/dlr}
+
+  webhook:
+    hmac-secret: ${WEBHOOK_HMAC_SECRET:dev-hmac-secret}
+
+# ===================================================================
+# Resilience4j — Circuit Breaker per carrier
+# ===================================================================
+resilience4j:
+  circuitbreaker:
+    instances:
+      ethiotelecom:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 50
+        failureRateThreshold: 50
+        waitDurationInOpenState: 60s
+        permittedNumberOfCallsInHalfOpenState: 5
+        minimumNumberOfCalls: 10
+      safaricom:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 50
+        failureRateThreshold: 50
+        waitDurationInOpenState: 60s
+        permittedNumberOfCallsInHalfOpenState: 5
+        minimumNumberOfCalls: 10
+
+# ===================================================================
+# Logging
+# ===================================================================
+logging:
+  level:
+    root: INFO
+    et.com.cog.esms: DEBUG

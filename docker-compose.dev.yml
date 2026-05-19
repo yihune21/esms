@@ -1,0 +1,63 @@
+# ===================================================================
+# eSMS Platform — Local Development Stack
+# ===================================================================
+# Usage: docker compose -f docker-compose.dev.yml up -d
+# ===================================================================
+
+version: "3.9"
+
+services:
+  # ── PostgreSQL 15 ────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: esms-postgres
+    environment:
+      POSTGRES_DB: esms
+      POSTGRES_USER: esms
+      POSTGRES_PASSWORD: esms_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - esms-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U esms"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── RabbitMQ 3.12 ────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: esms-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Management UI
+    volumes:
+      - esms-rmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ── Redis 7 ──────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: esms-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - esms-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  esms-pg-data:
+  esms-rmq-data:
+  esms-redis-data:

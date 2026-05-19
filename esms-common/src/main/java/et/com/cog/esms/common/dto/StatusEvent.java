@@ -1,0 +1,40 @@
+package et.com.cog.esms.common.dto;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import et.com.cog.esms.common.enums.MessageStatus;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.Instant;
+import java.util.UUID;
+
+/**
+ * AMQP message published by eSMS-Sender onto sms.dlr.q,
+ * consumed by eSMS-Core to update message status.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class StatusEvent {
+
+    @JsonProperty("message_id")
+    private UUID messageId;
+
+    @JsonProperty("workspace_id")
+    private UUID workspaceId;
+
+    private MessageStatus status;
+
+    private String carrier;
+
+    @JsonProperty("carrier_msg_id")
+    private String carrierMsgId;
+
+    @JsonProperty("error_code")
+    private String errorCode;
+
+    private Instant timestamp;
+}
