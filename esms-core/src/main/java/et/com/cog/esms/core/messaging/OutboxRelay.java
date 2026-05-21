@@ -1,6 +1,6 @@
 package et.com.cog.esms.core.messaging;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+// import com.fasterxml.jackson.databind.ObjectMapper;
 import et.com.cog.esms.common.constants.QueueConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +26,7 @@ public class OutboxRelay {
 
     private final OutboxEventRepository outboxRepo;
     private final RabbitTemplate rabbitTemplate;
-    private final ObjectMapper objectMapper;
+    // private final ObjectMapper objectMapper;
 
     /**
      * Poll every 2 seconds for unpublished outbox events.
