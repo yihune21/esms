@@ -11,7 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
+// import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import com.rabbitmq.client.Channel;
 import org.springframework.stereotype.Component;
 
@@ -31,7 +31,7 @@ public class SendCommandConsumer {
     private final List<SmsGateway> gateways;
     private final StatusEventPublisher statusPublisher;
     private final ObjectMapper objectMapper;
-    private final RabbitTemplate rabbitTemplate;
+    // private final RabbitTemplate rabbitTemplate;
 
     @RabbitListener(queues = QueueConstants.QUEUE_SEND, ackMode = "MANUAL")
     public void onMessage(Message message, Channel channel) throws Exception {
