@@ -1,0 +1,1357 @@
+{
+  "info": {
+    "name": "NIC eSMS API",
+    "description": "Postman collection for the NIC eSMS platform. Includes endpoints for Authentication, Workspaces, Contacts, Contact Groups, Templates, and Campaigns.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "preAuthToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "senderUrl",
+      "value": "http://localhost:8081",
+      "type": "string"
+    },
+    {
+      "key": "exportId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.preAuthToken) {",
+                  "    pm.collectionVariables.set(\"preAuthToken\", jsonData.preAuthToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"password\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Verify OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.accessToken) {",
+                  "    pm.collectionVariables.set(\"accessToken\", jsonData.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"preAuthToken\": \"{{preAuthToken}}\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "verify-otp"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.accessToken) {",
+                  "    pm.collectionVariables.set(\"accessToken\", jsonData.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"preAuthToken\": \"{{preAuthToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/resend-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "resend-otp"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Workspaces",
+      "item": [
+        {
+          "name": "List Workspaces",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Workspace",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"WS-01\",\n  \"name\": \"Marketing Dept\",\n  \"kind\": \"GENERIC\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Workspace",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<workspace_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Workspace",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Marketing Dept Updated\",\n  \"senderMask\": \"MKTG\",\n  \"dailySmsLimit\": 5000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<workspace_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Members",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/:id/members",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                ":id",
+                "members"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<workspace_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add Member",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"<user_uuid>\",\n  \"roleId\": \"<role_uuid>\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/:id/members",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                ":id",
+                "members"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<workspace_uuid>"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Contacts",
+      "item": [
+        {
+          "name": "List Contacts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/contacts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contacts"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Contact",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Abebe Bikila\",\n  \"phoneE164\": \"+251911000001\",\n  \"branch\": \"Addis Ababa\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/contacts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contacts"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Contact",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/contacts/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contacts",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<contact_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Contact",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Abebe Bikila Updated\",\n  \"branch\": \"Hawassa\",\n  \"optOut\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/contacts/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contacts",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<contact_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Contact",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/contacts/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contacts",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<contact_uuid>"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Contact Groups",
+      "item": [
+        {
+          "name": "List Groups",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Renewal Segment A\",\n  \"description\": \"Policies expiring within 30 days\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Group",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/groups/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<group_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Group",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Renewal Segment A - Updated\",\n  \"description\": \"Policies expiring within 30 days (revised)\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/groups/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<group_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Group",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/groups/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<group_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Group Members",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/groups/:id/members",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                ":id",
+                "members"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<group_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add Contact to Group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contactId\": \"<contact_uuid>\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/groups/:id/members",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                ":id",
+                "members"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<group_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Remove Contact from Group",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/groups/:id/members/:contactId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                ":id",
+                "members",
+                ":contactId"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<group_uuid>"
+                },
+                {
+                  "key": "contactId",
+                  "value": "<contact_uuid>"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Templates",
+      "item": [
+        {
+          "name": "List Templates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/templates?status=APPROVED",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "templates"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "APPROVED",
+                  "description": "Filter by status: DRAFT, APPROVED, RETIRED",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Policy Renewal Reminder\",\n  \"body\": \"Dear {{name}}, your policy {{policyNumber}} expires on {{expiryDate}}. Please renew to stay covered.\",\n  \"encoding\": \"GSM7\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/templates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "templates"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Template",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/templates/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "templates",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<template_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Template",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"Dear {{name}}, your policy expires on {{expiryDate}}. Renew now!\",\n  \"encoding\": \"GSM7\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/templates/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "templates",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<template_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Approve Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/templates/:id/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "templates",
+                ":id",
+                "approve"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<template_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Retire Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/templates/:id/retire",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "templates",
+                ":id",
+                "retire"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<template_uuid>"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Campaigns",
+      "item": [
+        {
+          "name": "List Campaigns",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/campaigns?status=DRAFT",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "campaigns"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "DRAFT",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Campaign",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Promo 2026\",\n  \"kind\": \"PROMOTIONAL\",\n  \"templateId\": \"<template_uuid>\",\n  \"recipientGroupId\": \"<group_uuid>\",\n  \"customBody\": null,\n  \"scheduledAt\": \"2026-06-01T10:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/campaigns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "campaigns"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Submit Campaign",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/campaigns/:id/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "campaigns",
+                ":id",
+                "submit"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<campaign_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Approve Campaign",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Approved for sending.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/campaigns/:id/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "campaigns",
+                ":id",
+                "approve"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<campaign_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reject Campaign",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Content needs revision.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/campaigns/:id/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "campaigns",
+                ":id",
+                "reject"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<campaign_uuid>"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Delivery Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/messages?from=2026-01-01T00:00:00Z&to=2026-12-31T23:59:59Z&status=DELIVERED&page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "messages"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01T00:00:00Z",
+                  "description": "ISO-8601 start (inclusive), optional"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31T23:59:59Z",
+                  "description": "ISO-8601 end (inclusive), optional"
+                },
+                {
+                  "key": "campaignId",
+                  "value": "",
+                  "description": "Filter by campaign UUID",
+                  "disabled": true
+                },
+                {
+                  "key": "branch",
+                  "value": "",
+                  "description": "Filter by branch tag",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "DELIVERED",
+                  "description": "PENDING|QUEUED|SENT|DELIVERED|FAILED|EXPIRED",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Export Jobs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/exports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "exports"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Request Export (XLSX)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var d=pm.response.json(); if(d.exportId) pm.collectionVariables.set(\"exportId\",d.exportId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"format\": \"XLSX\",\n  \"from\": \"2026-01-01T00:00:00Z\",\n  \"to\": \"2026-12-31T23:59:59Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reports/exports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "exports"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Poll Export Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/exports/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "exports",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{exportId}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "DLR Webhooks (Sender :8081)",
+      "item": [
+        {
+          "name": "Ethio Telecom DLR Callback",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-EthioTelecom-Signature",
+                "value": "dev-hmac-secret",
+                "description": "HMAC-SHA256 hex signature (omit in dev)",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reference\": \"<message_uuid>\",\n  \"status\": \"DELIVERED\",\n  \"carrier_msg_id\": \"ET-12345\",\n  \"timestamp\": \"2026-06-01T10:05:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{senderUrl}}/webhooks/ethiotelecom/dlr",
+              "host": [
+                "{{senderUrl}}"
+              ],
+              "path": [
+                "webhooks",
+                "ethiotelecom",
+                "dlr"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Safaricom DLR Callback",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Safaricom-Signature",
+                "value": "dev-hmac-secret",
+                "description": "HMAC-SHA256 hex signature (omit in dev)",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reference\": \"<message_uuid>\",\n  \"status\": \"DELIVERED\",\n  \"carrier_msg_id\": \"SAF-67890\",\n  \"timestamp\": \"2026-06-01T10:05:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{senderUrl}}/webhooks/safaricom/dlr",
+              "host": [
+                "{{senderUrl}}"
+              ],
+              "path": [
+                "webhooks",
+                "safaricom",
+                "dlr"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -40,7 +40,7 @@
         <poi.version>5.2.5</poi.version>
         <opencsv.version>5.9</opencsv.version>
         <testcontainers.version>1.19.7</testcontainers.version>
-        <lombok.version>1.18.34</lombok.version>
+        <lombok.version>1.18.46</lombok.version>
     </properties>
 
     <dependencyManagement>
