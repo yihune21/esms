@@ -48,6 +48,5 @@ Because your local machine runs a cutting-edge Java version (JDK 25) which curre
 
 ## Next Steps
 
-1. **Frontend Integration**: The REST APIs (Auth, Workspaces, Campaigns) are ready for the Vue/React presentation layer to connect.
-2. **Carrier Implementations**: Once Ethio Telecom and Safaricom provide their SMPP/HTTP API credentials, new classes implementing `SmsGateway` can be seamlessly added to the Sender microservice.
-3. **Active Directory Binding**: The `AuthController` currently stubs local DB authentication but is architected to be swapped with an LDAP bind once the NIC IT department provisions the service account.
+1. **Carrier Implementations**: Once Ethio Telecom and Safaricom provide their SMPP/HTTP API credentials, new classes implementing `SmsGateway` can be seamlessly added to the Sender microservice.
+2. **Active Directory Binding**: The `AuthController` currently stubs local DB authentication but is architected to be swapped with an LDAP bind once the NIC IT department provisions the service account.
