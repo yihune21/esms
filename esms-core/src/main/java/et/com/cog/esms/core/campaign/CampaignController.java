@@ -68,9 +68,38 @@ public class CampaignController {
         return ResponseEntity.ok(toDto(campaignService.reject(id, note.getNote())));
     }
 
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('CAMPAIGN_DRAFT')")
+    public ResponseEntity<CampaignDto> update(@PathVariable UUID id,
+                                               @RequestBody UpdateCampaignRequest req) {
+        Campaign c = campaignService.update(id,
+                req.getName(), req.getKind(),
+                req.getTemplateId(), req.getRecipientGroupId(),
+                req.getCustomBody(), req.getScheduledAt());
+        return ResponseEntity.ok(toDto(c));
+    }
+
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize("hasAuthority('CAMPAIGN_CANCEL')")
+    public ResponseEntity<CampaignDto> cancel(@PathVariable UUID id,
+                                               @RequestBody(required = false) NoteRequest note) {
+        String n = note != null ? note.getNote() : null;
+        return ResponseEntity.ok(toDto(campaignService.cancel(id, n)));
+    }
+
     private CampaignDto toDto(Campaign c) {
         return new CampaignDto(c.getId(), c.getName(), c.getKind(), c.getStatus(),
                 c.getRecipientCount(), c.getScheduledAt(), c.getCreatedAt());
+    }
+
+    @Data
+    public static class UpdateCampaignRequest {
+        private String  name;
+        private String  kind;
+        private UUID    templateId;
+        private UUID    recipientGroupId;
+        private String  customBody;
+        private Instant scheduledAt;
     }
 
     @Data

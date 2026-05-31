@@ -13,6 +13,23 @@ import java.util.UUID;
 @Repository
 public interface MessageRepository extends JpaRepository<Message, UUID> {
 
+    // ── Projection interfaces for aggregation results ─────────────────────
+
+    interface DailyTrendPoint {
+        /** Truncated date string, e.g. "2024-06-15" (cast to VARCHAR in query). */
+        String getDay();
+        String getStatus();
+        long   getTotal();
+    }
+
+    interface CampaignSummaryPoint {
+        UUID   getCampaignId();
+        long   getSent();
+        long   getDelivered();
+        long   getFailed();
+        long   getPending();
+    }
+
     List<Message> findByCampaignId(UUID campaignId);
 
     List<Message> findByWorkspaceIdAndStatus(UUID workspaceId, String status);
@@ -74,5 +91,55 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
             @Param("campaignId") UUID    campaignId,
             @Param("status")     String  status,
             @Param("branch")     String  branch
+    );
+
+    // ── Aggregation queries ───────────────────────────────────────────────────
+
+    /**
+     * Daily delivery trend: for each (day, status) pair within the date range
+     * returns the count of messages. Used by GET /reports/aggregations/daily.
+     *
+     * CAST(... AS date) truncates the timestamp to calendar-day precision in PostgreSQL.
+     */
+    @Query(value = """
+        SELECT CAST(m.created_at AS date) AS day,
+               m.status                  AS status,
+               COUNT(*)                  AS total
+        FROM message m
+        WHERE m.workspace_id = :wsId
+          AND (:from IS NULL OR m.created_at >= :from)
+          AND (:to   IS NULL OR m.created_at <= :to)
+        GROUP BY CAST(m.created_at AS date), m.status
+        ORDER BY CAST(m.created_at AS date)
+        """, nativeQuery = true)
+    List<DailyTrendPoint> findDailyTrend(
+            @Param("wsId")  UUID    workspaceId,
+            @Param("from")  Instant from,
+            @Param("to")    Instant to
+    );
+
+    /**
+     * Per-campaign summary: sent, delivered, failed, and pending counts
+     * for every campaign in the workspace within the date range.
+     * Used by GET /reports/aggregations/campaigns.
+     */
+    @Query(value = """
+        SELECT m.campaign_id                                             AS campaignId,
+               COUNT(*) FILTER (WHERE m.status = 'SENT')                AS sent,
+               COUNT(*) FILTER (WHERE m.status = 'DELIVERED')           AS delivered,
+               COUNT(*) FILTER (WHERE m.status = 'FAILED')              AS failed,
+               COUNT(*) FILTER (WHERE m.status IN ('PENDING','QUEUED')) AS pending
+        FROM message m
+        WHERE m.workspace_id = :wsId
+          AND m.campaign_id IS NOT NULL
+          AND (:from IS NULL OR m.created_at >= :from)
+          AND (:to   IS NULL OR m.created_at <= :to)
+        GROUP BY m.campaign_id
+        ORDER BY delivered DESC
+        """, nativeQuery = true)
+    List<CampaignSummaryPoint> findCampaignSummaries(
+            @Param("wsId")  UUID    workspaceId,
+            @Param("from")  Instant from,
+            @Param("to")    Instant to
     );
 }

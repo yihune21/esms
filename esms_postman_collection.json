@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "NIC eSMS API",
-    "description": "Postman collection for the NIC eSMS platform. Includes endpoints for Authentication, Workspaces, Contacts, Contact Groups, Templates, and Campaigns.",
+    "description": "Postman collection for the NIC eSMS platform. Includes endpoints for Authentication, Workspaces, Contacts, Contact Groups, Templates, Campaigns, Schedules, Reports, and DLR Webhooks.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -1122,6 +1122,284 @@
               ]
             }
           }
+        },
+        {
+          "name": "Edit Campaign",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Promo 2026 Revised\",\n  \"templateId\": \"<template_uuid>\",\n  \"recipientGroupId\": \"<group_uuid>\",\n  \"customBody\": null,\n  \"scheduledAt\": \"2026-06-15T10:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/campaigns/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "campaigns",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<campaign_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel Campaign",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/campaigns/:id/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "campaigns",
+                ":id",
+                "cancel"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<campaign_uuid>"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Schedules",
+      "item": [
+        {
+          "name": "List Schedules",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/schedules?status=ACTIVE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schedules"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "ACTIVE",
+                  "description": "Filter by status: ACTIVE, PAUSED, COMPLETED, CANCELLED",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Schedule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Monthly Policy Renewal Reminder\",\n  \"cronExpression\": \"0 9 1 * *\",\n  \"templateId\": \"<template_uuid>\",\n  \"recipientGroupId\": \"<group_uuid>\",\n  \"customBody\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/schedules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schedules"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Schedule",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/schedules/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schedules",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<schedule_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Schedule",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Monthly Policy Renewal Reminder (Updated)\",\n  \"cronExpression\": \"0 8 1 * *\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/schedules/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schedules",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<schedule_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Schedule",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/schedules/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schedules",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<schedule_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Pause Schedule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/schedules/:id/pause",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schedules",
+                ":id",
+                "pause"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<schedule_uuid>"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resume Schedule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/schedules/:id/resume",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schedules",
+                ":id",
+                "resume"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<schedule_uuid>"
+                }
+              ]
+            }
+          }
         }
       ]
     },
@@ -1275,6 +1553,82 @@
                 {
                   "key": "id",
                   "value": "{{exportId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Daily Aggregation",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/aggregations/daily?from=2026-01-01T00:00:00Z&to=2026-12-31T23:59:59Z",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "aggregations",
+                "daily"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01T00:00:00Z",
+                  "description": "ISO-8601 start (inclusive)"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31T23:59:59Z",
+                  "description": "ISO-8601 end (inclusive)"
+                },
+                {
+                  "key": "branch",
+                  "value": "",
+                  "description": "Optional branch filter",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Campaign Aggregation",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/aggregations/campaigns?from=2026-01-01T00:00:00Z&to=2026-12-31T23:59:59Z",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "aggregations",
+                "campaigns"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01T00:00:00Z",
+                  "description": "ISO-8601 start (inclusive)"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31T23:59:59Z",
+                  "description": "ISO-8601 end (inclusive)"
                 }
               ]
             }

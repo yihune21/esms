@@ -6,7 +6,6 @@ import et.com.cog.esms.core.security.WorkspaceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -95,7 +94,46 @@ public class ReportService {
                 .orElseThrow(() -> new IllegalArgumentException("Export not found: " + exportId));
     }
 
-    // ── helpers ──────────────────────────────────────────────────────────────
+    // ── Aggregation ──────────────────────────────────────────────────────────
+
+    /**
+     * Daily delivery trend for the workspace within a date range.
+     * Each point represents a (day, status, count) tuple.
+     */
+    public List<DailyTrendDto> getDailyTrend(UUID workspaceId, Instant from, Instant to) {
+        return messageRepo.findDailyTrend(workspaceId, from, to)
+                .stream()
+                .map(p -> new DailyTrendDto(p.getDay(), p.getStatus(), p.getTotal()))
+                .toList();
+    }
+
+    /**
+     * Per-campaign message summary for the workspace within a date range.
+     * Columns: campaignId, sent, delivered, failed, pending.
+     */
+    public List<CampaignSummaryDto> getCampaignSummaries(UUID workspaceId, Instant from, Instant to) {
+        return messageRepo.findCampaignSummaries(workspaceId, from, to)
+                .stream()
+                .map(p -> new CampaignSummaryDto(
+                        p.getCampaignId(),
+                        p.getSent(),
+                        p.getDelivered(),
+                        p.getFailed(),
+                        p.getPending()))
+                .toList();
+    }
+
+    // ── Transfer objects ─────────────────────────────────────────────────────
+
+    public record DailyTrendDto(String day, String status, long total) {}
+
+    public record CampaignSummaryDto(
+            UUID   campaignId,
+            long   sent,
+            long   delivered,
+            long   failed,
+            long   pending
+    ) {}
 
     /** Mask phone for privacy: keeps last 4 digits, e.g. ****6789 */
     private String maskPhone(String phone) {

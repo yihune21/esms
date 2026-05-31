@@ -115,8 +115,7 @@ public class ReportExportWorker {
                 row.createCell(7).setCellValue(m.getCreatedAt() != null ? m.getCreatedAt().toString() : "");
             }
 
-            // Auto-size columns (limit to first 1000 rows to avoid perf issues)
-            int sizeLimit = Math.min(messages.size() + 1, 1000);
+            // Auto-size all columns for readability
             for (int i = 0; i < columns.length; i++) {
                 sheet.autoSizeColumn(i);
             }

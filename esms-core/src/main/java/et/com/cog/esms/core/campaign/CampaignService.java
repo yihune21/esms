@@ -39,7 +39,18 @@ public class CampaignService {
         // Finance 2-tier
         Map.entry("FINANCE:DRAFT",           Set.of("PENDING_HEAD")),
         Map.entry("FINANCE:PENDING_HEAD",    Set.of("PENDING_CEO", "DRAFT")),
-        Map.entry("FINANCE:PENDING_CEO",     Set.of("APPROVED", "DRAFT"))
+        Map.entry("FINANCE:PENDING_CEO",     Set.of("APPROVED", "DRAFT")),
+        // Cancellation — any workspace kind, from APPROVED or QUEUED
+        Map.entry("UNDERWRITING:APPROVED",   Set.of("CANCELLED")),
+        Map.entry("UNDERWRITING:QUEUED",     Set.of("CANCELLED")),
+        Map.entry("CLAIMS:APPROVED",         Set.of("CANCELLED")),
+        Map.entry("CLAIMS:QUEUED",           Set.of("CANCELLED")),
+        Map.entry("MARKETING:APPROVED",      Set.of("CANCELLED")),
+        Map.entry("MARKETING:QUEUED",        Set.of("CANCELLED")),
+        Map.entry("GENERIC:APPROVED",        Set.of("CANCELLED")),
+        Map.entry("GENERIC:QUEUED",          Set.of("CANCELLED")),
+        Map.entry("FINANCE:APPROVED",        Set.of("CANCELLED")),
+        Map.entry("FINANCE:QUEUED",          Set.of("CANCELLED"))
     );
 
     @Transactional
@@ -120,6 +131,53 @@ public class CampaignService {
         validateTransition(ws.getKind(), c.getStatus(), "DRAFT");
         recordApproval(c, c.getStatus(), "DRAFT", note);
         c.setStatus("DRAFT");
+        return campaignRepo.save(c);
+    }
+
+    /**
+     * Update a campaign that is still in DRAFT status.
+     * Any subset of fields may be changed; null values leave the field unchanged.
+     */
+    @Transactional
+    public Campaign update(UUID campaignId, String name, String kind,
+                           UUID templateId, UUID recipientGroupId,
+                           String customBody, Instant scheduledAt) {
+        Campaign c = campaignRepo.findById(campaignId)
+                .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
+
+        if (!"DRAFT".equals(c.getStatus())) {
+            throw new IllegalStateException(
+                    "Only DRAFT campaigns can be edited. Current status: " + c.getStatus());
+        }
+
+        if (name       != null) c.setName(name);
+        if (kind       != null) c.setKind(kind);
+        if (templateId != null) c.setTemplateId(templateId);
+        if (recipientGroupId != null) c.setRecipientGroupId(recipientGroupId);
+        if (customBody != null) c.setCustomBody(customBody);
+        if (scheduledAt != null) c.setScheduledAt(scheduledAt);
+
+        log.info("Campaign updated: id={}, by={}", campaignId, WorkspaceContext.currentUserId());
+        return campaignRepo.save(c);
+    }
+
+    /**
+     * Cancel an APPROVED or QUEUED campaign.
+     * Records an audit trail entry and transitions status to CANCELLED.
+     */
+    @Transactional
+    public Campaign cancel(UUID campaignId, String note) {
+        Campaign c = campaignRepo.findById(campaignId)
+                .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
+
+        Workspace ws = workspaceRepo.findById(c.getWorkspaceId())
+                .orElseThrow(() -> new IllegalStateException("Workspace not found"));
+
+        validateTransition(ws.getKind(), c.getStatus(), "CANCELLED");
+        recordApproval(c, c.getStatus(), "CANCELLED", note);
+        c.setStatus("CANCELLED");
+        c.setCompletedAt(Instant.now());
+        log.info("Campaign cancelled: id={}, by={}", campaignId, WorkspaceContext.currentUserId());
         return campaignRepo.save(c);
     }
 

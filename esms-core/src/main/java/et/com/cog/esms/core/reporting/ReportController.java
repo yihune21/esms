@@ -1,5 +1,7 @@
 package et.com.cog.esms.core.reporting;
 
+import et.com.cog.esms.core.reporting.ReportService.CampaignSummaryDto;
+import et.com.cog.esms.core.reporting.ReportService.DailyTrendDto;
 import et.com.cog.esms.core.security.WorkspaceContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.FileSystemResource;
@@ -16,7 +18,6 @@ import org.springframework.web.bind.annotation.*;
 import java.io.File;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -129,6 +130,47 @@ public class ReportController {
                 export.getCompletedAt(),
                 export.getFilePath()
         ));
+    }
+
+    // ── Aggregation endpoints ──────────────────────────────────────────────
+
+    /**
+     * Daily delivery trend.
+     *
+     * Returns an array of { day, status, total } points for the given date range.
+     * Each (day × status) combination is one entry.
+     *
+     * Query params:
+     *   from – ISO-8601 start timestamp (optional)
+     *   to   – ISO-8601 end timestamp   (optional)
+     */
+    @GetMapping("/aggregations/daily")
+    @PreAuthorize("hasAnyAuthority('REPORT_VIEW','REPORT_EXPORT')")
+    public ResponseEntity<List<DailyTrendDto>> getDailyTrend(
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to) {
+
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
+        return ResponseEntity.ok(reportService.getDailyTrend(wsId, from, to));
+    }
+
+    /**
+     * Per-campaign message summary.
+     *
+     * Returns one row per campaign with sent / delivered / failed / pending counts.
+     *
+     * Query params:
+     *   from – ISO-8601 start timestamp (optional)
+     *   to   – ISO-8601 end timestamp   (optional)
+     */
+    @GetMapping("/aggregations/campaigns")
+    @PreAuthorize("hasAnyAuthority('REPORT_VIEW','REPORT_EXPORT')")
+    public ResponseEntity<List<CampaignSummaryDto>> getCampaignSummaries(
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to) {
+
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
+        return ResponseEntity.ok(reportService.getCampaignSummaries(wsId, from, to));
     }
 
     // ── inline DTOs ────────────────────────────────────────────────────────
