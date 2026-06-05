@@ -5,6 +5,6 @@ package et.com.cog.esms.common.enums;
  * and Sender (to pick the gateway adapter).
  */
 public enum Carrier {
-    ETHIO_TELECOM,
-    SAFARICOM
+    /** NIB internal SMSC — SMPP 3.4 aggregator that routes to all Ethiopian carriers */
+    NIB_SMSC
 }

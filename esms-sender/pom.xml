@@ -61,10 +61,16 @@
             <artifactId>resilience4j-retry</artifactId>
         </dependency>
 
-        <!-- Utilities -->
+        <!-- Commons Codec -->
         <dependency>
             <groupId>commons-codec</groupId>
             <artifactId>commons-codec</artifactId>
+        </dependency>
+
+        <!-- SMPP 3.4 -->
+        <dependency>
+            <groupId>org.jsmpp</groupId>
+            <artifactId>jsmpp</artifactId>
         </dependency>
     </dependencies>
 

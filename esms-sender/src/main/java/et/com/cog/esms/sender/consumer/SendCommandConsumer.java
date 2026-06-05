@@ -28,7 +28,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SendCommandConsumer {
 
-    private final List<SmsGateway> gateways;
+    private final SmsGateway gateway;
     private final StatusEventPublisher statusPublisher;
     private final ObjectMapper objectMapper;
     // private final RabbitTemplate rabbitTemplate;
@@ -53,10 +53,7 @@ public class SendCommandConsumer {
                     .timestamp(Instant.now())
                     .build());
 
-            // Find the appropriate gateway
-            SmsGateway gateway = resolveGateway(cmd.getResolvedCarrier());
-
-            // Send
+            // Send using the single NIB SMSC gateway
             SmsGateway.SendResult result = gateway.sendSms(new SmsGateway.SendRequest(
                     cmd.getMessageId().toString(),
                     cmd.getTo(),
@@ -93,16 +90,5 @@ public class SendCommandConsumer {
             // Reject and requeue (will go to DLQ after max retries)
             channel.basicNack(deliveryTag, false, false);
         }
-    }
-
-    private SmsGateway resolveGateway(String carrier) {
-        return gateways.stream()
-                .filter(g -> g.carrier().name().equalsIgnoreCase(carrier)
-                        || "dummy".equalsIgnoreCase(carrier))
-                .findFirst()
-                .orElseGet(() -> {
-                    log.warn("No gateway found for carrier '{}', using first available", carrier);
-                    return gateways.get(0);
-                });
     }
 }

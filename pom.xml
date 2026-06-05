@@ -114,6 +114,13 @@
                 <version>${opencsv.version}</version>
             </dependency>
 
+            <!-- JSMPP — SMPP 3.4 client library -->
+            <dependency>
+                <groupId>org.jsmpp</groupId>
+                <artifactId>jsmpp</artifactId>
+                <version>3.0.0</version>
+            </dependency>
+
             <!-- Commons Codec -->
             <dependency>
                 <groupId>commons-codec</groupId>

@@ -32,12 +32,12 @@ We successfully built a **Modular Monolith (eSMS-Core)** combined with an **Asyn
 ### 5. eSMS Sender Microservice
 
 - Created a lightweight standalone microservice to consume the `sms.send` queue.
-- Implemented the `SmsGateway` interface and a `DummySmsGateway` that simulates sending SMS to carriers by writing to local logs, allowing full end-to-end testing without incurring carrier costs.
-- Configured it to push Delivery Reports (DLRs) back into `sms.dlr.q` for the core system to update statuses.
+- Implemented the `NibSmscSmsGateway` which connects directly to the internal NIB SMSC via SMPP 3.4. This acts as an aggregator that automatically routes to all Ethiopian carriers (Ethio Telecom and Safaricom).
+- Configured native SMPP Delivery Receipts (DLRs) to be captured from `deliver_sm` packets and pushed back into `sms.dlr.q` for the core system to update statuses in real-time.
+- Secured credentials by moving them entirely to environment variables via a local `.env` file.
 
 ## Local Execution Environment
-
-Because your local machine runs a cutting-edge Java version (JDK 25) which currently conflicts with the Lombok annotation processor, we have structured the project to run entirely via Docker.
+we have structured the project to run entirely via Docker.
 
 > [!TIP]
 > **Running the Platform**
@@ -48,5 +48,6 @@ Because your local machine runs a cutting-edge Java version (JDK 25) which curre
 
 ## Next Steps
 
-1. **Carrier Implementations**: Once Ethio Telecom and Safaricom provide their SMPP/HTTP API credentials, new classes implementing `SmsGateway` can be seamlessly added to the Sender microservice.
-2. **Active Directory Binding**: The `AuthController` currently stubs local DB authentication but is architected to be swapped with an LDAP bind once the NIC IT department provisions the service account.
+1. **Environment Configuration**: Before deploying or running locally, make sure to create a `.env` file in the root directory (copied from the configuration format) and populate `NIB_SMSC_PASSWORD` with the real SMPP credentials. Ensure this file is never committed to Git.
+2. **Network Reachability**: The sender microservice must be deployed on a server that has network reachability to the NIB internal SMSC (`10.204.181.70:5019`).
+3. **Active Directory Binding**: The `AuthController` currently stubs local DB authentication but is architected to be swapped with an LDAP bind once the NIC IT department provisions the service account.
