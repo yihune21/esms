@@ -37,12 +37,13 @@ We successfully built a **Modular Monolith (eSMS-Core)** combined with an **Asyn
 - Secured credentials by moving them entirely to environment variables via a local `.env` file.
 
 ## Local Execution Environment
+
 we have structured the project to run entirely via Docker.
 
 > [!TIP]
 > **Running the Platform**
 >
-> 1. Start the backing infrastructure: `docker-compose -f docker-compose.dev.yml up -d`
+> 1. Start the backing infrastructure: `docker compose -f docker-compose.dev.yml up -d`
 > 2. Build the Docker images using the provided `Dockerfile`s in `esms-core` and `esms-sender`. These files use a multi-stage build that compiles the code safely inside a JDK 17 environment.
 > 3. Run the compiled Docker containers, and they will automatically connect to the local Postgres/Redis/RabbitMQ stack.
 
