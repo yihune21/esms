@@ -30,6 +30,8 @@ public class Workspace {
     @Column(nullable = false)
     private String status;
 
+    private String division;
+
     @Column(name = "sender_mask")
     private String senderMask;
 

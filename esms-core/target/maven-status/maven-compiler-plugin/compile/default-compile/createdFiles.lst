@@ -4,10 +4,13 @@ et/com/cog/esms/core/contact/ContactGroupMemberRepository.class
 et/com/cog/esms/core/identity/OtpService$OtpVerificationResult.class
 et/com/cog/esms/core/campaign/Campaign.class
 et/com/cog/esms/core/reporting/ReportService.class
+et/com/cog/esms/core/contact/ContactUploadRepository.class
 et/com/cog/esms/core/workspace/Permission$PermissionBuilder.class
 et/com/cog/esms/core/reporting/DeliveryReport.class
+et/com/cog/esms/core/contact/ContactUpload$ContactUploadBuilder.class
 et/com/cog/esms/core/campaign/Approval$ApprovalBuilder.class
 et/com/cog/esms/core/schedule/ScheduleService.class
+et/com/cog/esms/core/contact/ExcelUploadService$1.class
 et/com/cog/esms/core/contact/ContactGroupController$CreateGroupRequest.class
 et/com/cog/esms/core/contact/ContactController$ContactDto.class
 et/com/cog/esms/core/contact/ContactGroupMember$ContactGroupMemberBuilder.class
@@ -20,10 +23,12 @@ et/com/cog/esms/core/template/TemplateController$CreateTemplateRequest.class
 et/com/cog/esms/core/security/GlobalExceptionHandler$ProblemDetail$ProblemDetailBuilder.class
 et/com/cog/esms/core/identity/LockoutService.class
 et/com/cog/esms/core/messaging/OutboxEvent.class
+et/com/cog/esms/core/identity/UserController.class
 et/com/cog/esms/core/config/OpenApiConfig.class
 et/com/cog/esms/core/identity/AuthController$ResendOtpRequest.class
 et/com/cog/esms/core/reporting/ReportExportWorker.class
 et/com/cog/esms/core/messaging/MessageRepository$DailyTrendPoint.class
+et/com/cog/esms/core/identity/UserController$UserDto.class
 et/com/cog/esms/core/identity/AuthController$LoginRequest.class
 et/com/cog/esms/core/campaign/ApprovalRepository.class
 et/com/cog/esms/core/reporting/ReportExport$ReportExportBuilder.class
@@ -48,6 +53,7 @@ et/com/cog/esms/core/identity/AppUser.class
 et/com/cog/esms/core/schedule/Schedule$ScheduleBuilder.class
 et/com/cog/esms/core/contact/ContactRepository.class
 et/com/cog/esms/core/reporting/DeliveryReport$MessageRow.class
+et/com/cog/esms/core/identity/UserController$CreateUserRequest.class
 et/com/cog/esms/core/workspace/Role$RoleBuilder.class
 et/com/cog/esms/core/reporting/ReportExportRequest.class
 et/com/cog/esms/core/contact/ContactGroupMemberId.class
@@ -74,12 +80,16 @@ et/com/cog/esms/core/identity/WorkspaceMember.class
 et/com/cog/esms/core/messaging/MessageStatusEventRepository.class
 et/com/cog/esms/core/messaging/StatusEventConsumer.class
 et/com/cog/esms/core/contact/ContactGroupController.class
+et/com/cog/esms/core/workspace/WorkspacePermission$WorkspacePermissionBuilder.class
 et/com/cog/esms/core/contact/ContactGroupRepository.class
 et/com/cog/esms/core/campaign/Approval.class
 et/com/cog/esms/core/security/GlobalExceptionHandler$ProblemDetail.class
 et/com/cog/esms/core/identity/UserRepository.class
+et/com/cog/esms/core/contact/ContactUpload.class
+et/com/cog/esms/core/workspace/WorkspacePermissionId.class
 et/com/cog/esms/core/messaging/RabbitMqConfig.class
 et/com/cog/esms/core/reporting/ReportService$DailyTrendDto.class
+et/com/cog/esms/core/workspace/WorkspacePermission.class
 et/com/cog/esms/core/identity/SessionService.class
 et/com/cog/esms/core/campaign/CampaignController$NoteRequest.class
 et/com/cog/esms/core/EsmsCoreApplication.class
@@ -88,6 +98,7 @@ et/com/cog/esms/core/identity/WorkspaceMemberRepository.class
 et/com/cog/esms/core/schedule/Schedule.class
 et/com/cog/esms/core/security/WorkspaceContext.class
 et/com/cog/esms/core/schedule/ScheduleController.class
+et/com/cog/esms/core/contact/ExcelUploadService.class
 et/com/cog/esms/core/reporting/ReportExport.class
 et/com/cog/esms/core/reporting/ReportController$ExportStatusResponse.class
 et/com/cog/esms/core/identity/AuthController$1.class
@@ -106,5 +117,6 @@ et/com/cog/esms/core/template/TemplateController$TemplateDto.class
 et/com/cog/esms/core/workspace/Workspace$WorkspaceBuilder.class
 et/com/cog/esms/core/messaging/Message.class
 et/com/cog/esms/core/contact/ContactController.class
+et/com/cog/esms/core/workspace/WorkspacePermissionRepository.class
 et/com/cog/esms/core/messaging/StatusEventConsumer$1.class
 et/com/cog/esms/core/identity/WorkspaceMember$WorkspaceMemberBuilder.class

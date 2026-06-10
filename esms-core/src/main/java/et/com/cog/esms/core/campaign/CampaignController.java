@@ -42,7 +42,7 @@ public class CampaignController {
     public ResponseEntity<CampaignDto> create(@Valid @RequestBody CreateCampaignRequest req) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
         Campaign c = campaignService.create(wsId, req.getName(), req.getKind(),
-                req.getTemplateId(), req.getRecipientGroupId(),
+                req.getTemplateId(), req.getRecipientGroupId(), req.getUploadId(),
                 req.getCustomBody(), req.getScheduledAt());
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(c));
     }
@@ -74,7 +74,7 @@ public class CampaignController {
                                                @RequestBody UpdateCampaignRequest req) {
         Campaign c = campaignService.update(id,
                 req.getName(), req.getKind(),
-                req.getTemplateId(), req.getRecipientGroupId(),
+                req.getTemplateId(), req.getRecipientGroupId(), req.getUploadId(),
                 req.getCustomBody(), req.getScheduledAt());
         return ResponseEntity.ok(toDto(c));
     }
@@ -89,6 +89,7 @@ public class CampaignController {
 
     private CampaignDto toDto(Campaign c) {
         return new CampaignDto(c.getId(), c.getName(), c.getKind(), c.getStatus(),
+                c.getTemplateId(), c.getCustomBody(), c.getRecipientGroupId(), c.getUploadId(),
                 c.getRecipientCount(), c.getScheduledAt(), c.getCreatedAt());
     }
 
@@ -98,6 +99,7 @@ public class CampaignController {
         private String  kind;
         private UUID    templateId;
         private UUID    recipientGroupId;
+        private UUID    uploadId;
         private String  customBody;
         private Instant scheduledAt;
     }
@@ -108,6 +110,7 @@ public class CampaignController {
         @NotBlank private String kind;
         private UUID templateId;
         private UUID recipientGroupId;
+        private UUID uploadId;
         private String customBody;
         private Instant scheduledAt;
     }
@@ -123,6 +126,10 @@ public class CampaignController {
         private String name;
         private String kind;
         private String status;
+        private UUID templateId;
+        private String customBody;
+        private UUID recipientGroupId;
+        private UUID uploadId;
         private Integer recipientCount;
         private Instant scheduledAt;
         private Instant createdAt;

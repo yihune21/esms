@@ -15,11 +15,15 @@
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/contact/ContactGroupMemberRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/contact/ContactGroupRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/contact/ContactRepository.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/contact/ContactUpload.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/contact/ContactUploadRepository.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/contact/ExcelUploadService.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/AppUser.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/AuthController.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/LockoutService.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/OtpService.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/SessionService.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/UserController.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/UserRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/WorkspaceMember.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/WorkspaceMemberRepository.java
@@ -57,4 +61,6 @@
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/workspace/RoleRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/workspace/Workspace.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/workspace/WorkspaceController.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/workspace/WorkspacePermission.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/workspace/WorkspacePermissionRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/workspace/WorkspaceRepository.java

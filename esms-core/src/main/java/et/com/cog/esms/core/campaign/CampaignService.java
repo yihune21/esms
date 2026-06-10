@@ -55,7 +55,7 @@ public class CampaignService {
 
     @Transactional
     public Campaign create(UUID workspaceId, String name, String kind,
-                           UUID templateId, UUID recipientGroupId,
+                           UUID templateId, UUID recipientGroupId, UUID uploadId,
                            String customBody, Instant scheduledAt) {
         Campaign c = Campaign.builder()
                 .workspaceId(workspaceId)
@@ -64,6 +64,7 @@ public class CampaignService {
                 .status("DRAFT")
                 .templateId(templateId)
                 .recipientGroupId(recipientGroupId)
+                .uploadId(uploadId)
                 .customBody(customBody)
                 .scheduledAt(scheduledAt)
                 .createdBy(WorkspaceContext.currentUserId())
@@ -140,7 +141,7 @@ public class CampaignService {
      */
     @Transactional
     public Campaign update(UUID campaignId, String name, String kind,
-                           UUID templateId, UUID recipientGroupId,
+                           UUID templateId, UUID recipientGroupId, UUID uploadId,
                            String customBody, Instant scheduledAt) {
         Campaign c = campaignRepo.findById(campaignId)
                 .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
@@ -154,6 +155,7 @@ public class CampaignService {
         if (kind       != null) c.setKind(kind);
         if (templateId != null) c.setTemplateId(templateId);
         if (recipientGroupId != null) c.setRecipientGroupId(recipientGroupId);
+        if (uploadId   != null) c.setUploadId(uploadId);
         if (customBody != null) c.setCustomBody(customBody);
         if (scheduledAt != null) c.setScheduledAt(scheduledAt);
 

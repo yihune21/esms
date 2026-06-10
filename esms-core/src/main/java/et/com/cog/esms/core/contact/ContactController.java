@@ -31,10 +31,13 @@ public class ContactController {
     // ── GET /contacts ────────────────────────────────────────────
     @GetMapping
     @PreAuthorize("hasAuthority('CONTACT_VIEW')")
-    public ResponseEntity<List<ContactDto>> list() {
+    public ResponseEntity<List<ContactDto>> list(
+            @RequestParam(required = false) String status) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
-        List<ContactDto> result = contactRepo.findByWorkspaceIdOrderByCreatedAtDesc(wsId)
-                .stream().map(this::toDto).collect(Collectors.toList());
+        List<Contact> contacts = status != null
+                ? contactRepo.findByWorkspaceIdAndStatusOrderByCreatedAtDesc(wsId, status)
+                : contactRepo.findByWorkspaceIdAndStatusOrderByCreatedAtDesc(wsId, "ACTIVE");
+        List<ContactDto> result = contacts.stream().map(this::toDto).collect(Collectors.toList());
         return ResponseEntity.ok(result);
     }
 
@@ -54,7 +57,9 @@ public class ContactController {
                 .name(req.getName())
                 .phoneE164(req.getPhoneE164())
                 .branch(req.getBranch())
+                .extra(req.getExtra() != null ? req.getExtra() : new HashMap<>())
                 .optOut(false)
+                .status("ACTIVE")
                 .build();
 
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(contactRepo.save(contact)));
@@ -79,26 +84,44 @@ public class ContactController {
                     if (updates.containsKey("name"))    c.setName((String) updates.get("name"));
                     if (updates.containsKey("branch"))  c.setBranch((String) updates.get("branch"));
                     if (updates.containsKey("optOut"))  c.setOptOut(Boolean.TRUE.equals(updates.get("optOut")));
+                    if (updates.containsKey("extra")) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, String> newExtra = (Map<String, String>) updates.get("extra");
+                        c.setExtra(newExtra);
+                    }
                     return ResponseEntity.ok(toDto(contactRepo.save(c)));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── DELETE /contacts/{id} ────────────────────────────────────
-    @DeleteMapping("/{id}")
+    // ── POST /contacts/{id}/deactivate ───────────────────────────
+    @PostMapping("/{id}/deactivate")
     @PreAuthorize("hasAuthority('CONTACT_CREATE')")
     @Transactional
-    public ResponseEntity<Void> delete(@PathVariable UUID id) {
-        if (!contactRepo.existsById(id)) return ResponseEntity.notFound().build();
-        contactRepo.deleteById(id);
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<ContactDto> deactivate(@PathVariable UUID id) {
+        return contactRepo.findById(id).map(c -> {
+            c.setStatus("INACTIVE");
+            return ResponseEntity.ok(toDto(contactRepo.save(c)));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    // ── POST /contacts/{id}/activate ─────────────────────────────
+    @PostMapping("/{id}/activate")
+    @PreAuthorize("hasAuthority('CONTACT_CREATE')")
+    @Transactional
+    public ResponseEntity<ContactDto> activate(@PathVariable UUID id) {
+        return contactRepo.findById(id).map(c -> {
+            c.setStatus("ACTIVE");
+            return ResponseEntity.ok(toDto(contactRepo.save(c)));
+        }).orElse(ResponseEntity.notFound().build());
     }
 
     // ── Helpers ──────────────────────────────────────────────────
 
     private ContactDto toDto(Contact c) {
         return new ContactDto(c.getId(), c.getWorkspaceId(), c.getName(),
-                c.getPhoneE164(), c.getBranch(), c.isOptOut(), c.getCreatedAt());
+                c.getPhoneE164(), c.getBranch(), c.getExtra(), c.getUploadId(),
+                c.isOptOut(), c.getStatus(), c.getCreatedAt());
     }
 
     // ── DTOs ─────────────────────────────────────────────────────
@@ -110,7 +133,10 @@ public class ContactController {
         private String name;
         private String phoneE164;
         private String branch;
+        private Map<String, String> extra;
+        private UUID uploadId;
         private boolean optOut;
+        private String status;
         private Instant createdAt;
     }
 
@@ -121,5 +147,6 @@ public class ContactController {
         @Pattern(regexp = "^\\+[1-9]\\d{6,14}$", message = "Phone must be E.164 format, e.g. +251911000000")
         private String phoneE164;
         private String branch;
+        private Map<String, String> extra;
     }
 }

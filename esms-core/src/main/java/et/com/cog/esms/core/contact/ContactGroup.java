@@ -2,10 +2,14 @@ package et.com.cog.esms.core.contact;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -29,6 +33,16 @@ public class ContactGroup {
     private String name;
 
     private String description;
+
+    /** Dynamic field definitions (column headers from Excel upload). */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    @Builder.Default
+    private List<String> fields = new ArrayList<>();
+
+    @Column(nullable = false)
+    @Builder.Default
+    private String status = "ACTIVE";
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

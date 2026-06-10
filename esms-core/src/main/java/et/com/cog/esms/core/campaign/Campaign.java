@@ -39,6 +39,9 @@ public class Campaign {
     @Column(name = "recipient_group_id")
     private UUID recipientGroupId;
 
+    @Column(name = "upload_id")
+    private UUID uploadId;
+
     @Column(name = "recipient_count")
     private Integer recipientCount;
 

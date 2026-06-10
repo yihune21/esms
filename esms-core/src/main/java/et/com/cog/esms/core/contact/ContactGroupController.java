@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
 import java.util.*;
@@ -29,15 +30,18 @@ public class ContactGroupController {
     private final ContactGroupRepository groupRepo;
     private final ContactGroupMemberRepository memberRepo;
     private final ContactRepository contactRepo;
+    private final ExcelUploadService excelUploadService;
 
     // ── GET /groups ──────────────────────────────────────────────
     @GetMapping
     @PreAuthorize("hasAuthority('CONTACT_VIEW')")
-    public ResponseEntity<List<GroupDto>> list() {
+    public ResponseEntity<List<GroupDto>> list(
+            @RequestParam(required = false) String status) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
-        return ResponseEntity.ok(
-                groupRepo.findByWorkspaceIdOrderByCreatedAtDesc(wsId)
-                        .stream().map(this::toDto).collect(Collectors.toList()));
+        List<ContactGroup> groups = status != null
+                ? groupRepo.findByWorkspaceIdAndStatusOrderByCreatedAtDesc(wsId, status)
+                : groupRepo.findByWorkspaceIdAndStatusOrderByCreatedAtDesc(wsId, "ACTIVE");
+        return ResponseEntity.ok(groups.stream().map(this::toDto).collect(Collectors.toList()));
     }
 
     // ── POST /groups ─────────────────────────────────────────────
@@ -83,14 +87,26 @@ public class ContactGroupController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── DELETE /groups/{id} ──────────────────────────────────────
-    @DeleteMapping("/{id}")
+    // ── POST /groups/{id}/deactivate ─────────────────────────────
+    @PostMapping("/{id}/deactivate")
     @PreAuthorize("hasAuthority('CONTACT_CREATE')")
     @Transactional
-    public ResponseEntity<Void> delete(@PathVariable UUID id) {
-        if (!groupRepo.existsById(id)) return ResponseEntity.notFound().build();
-        groupRepo.deleteById(id);
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<GroupDto> deactivate(@PathVariable UUID id) {
+        return groupRepo.findById(id).map(g -> {
+            g.setStatus("INACTIVE");
+            return ResponseEntity.ok(toDto(groupRepo.save(g)));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    // ── POST /groups/{id}/activate ───────────────────────────────
+    @PostMapping("/{id}/activate")
+    @PreAuthorize("hasAuthority('CONTACT_CREATE')")
+    @Transactional
+    public ResponseEntity<GroupDto> activate(@PathVariable UUID id) {
+        return groupRepo.findById(id).map(g -> {
+            g.setStatus("ACTIVE");
+            return ResponseEntity.ok(toDto(groupRepo.save(g)));
+        }).orElse(ResponseEntity.notFound().build());
     }
 
     // ── GET /groups/{id}/members ─────────────────────────────────
@@ -108,6 +124,10 @@ public class ContactGroupController {
                             map.put("phoneE164", c.getPhoneE164());
                             map.put("branch", c.getBranch());
                             map.put("optOut", c.isOptOut());
+                            map.put("status", c.getStatus());
+                            if (c.getExtra() != null && !c.getExtra().isEmpty()) {
+                                map.putAll(c.getExtra());
+                            }
                             return map;
                         }).orElse(null))
                 .filter(Objects::nonNull)
@@ -154,11 +174,44 @@ public class ContactGroupController {
         return ResponseEntity.noContent().build();
     }
 
+    // ── POST /groups/{id}/upload ─────────────────────────────────
+    @PostMapping("/{id}/upload")
+    @PreAuthorize("hasAuthority('CONTACT_UPLOAD')")
+    public ResponseEntity<?> uploadContacts(@PathVariable UUID id,
+                                            @RequestParam("file") MultipartFile file) {
+        if (!groupRepo.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
+        UUID userId = WorkspaceContext.currentUserId();
+
+        ContactUpload upload = excelUploadService.parseAndImport(wsId, userId, file, id);
+
+        if ("FAILED".equals(upload.getStatus())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(upload);
+        }
+
+        // Update group fields based on uploaded mapping
+        if (upload.getMapping() != null && !upload.getMapping().isEmpty()) {
+            groupRepo.findById(id).ifPresent(group -> {
+                List<String> currentFields = new ArrayList<>(group.getFields() != null ? group.getFields() : new ArrayList<>());
+                upload.getMapping().keySet().forEach(k -> {
+                    if (!currentFields.contains(k)) currentFields.add(k);
+                });
+                group.setFields(currentFields);
+                groupRepo.save(group);
+            });
+        }
+
+        return ResponseEntity.ok(upload);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────
 
     private GroupDto toDto(ContactGroup g) {
         return new GroupDto(g.getId(), g.getWorkspaceId(), g.getName(),
-                g.getDescription(), g.getCreatedAt());
+                g.getDescription(), g.getFields(), g.getStatus(), g.getCreatedAt());
     }
 
     // ── DTOs ─────────────────────────────────────────────────────
@@ -169,6 +222,8 @@ public class ContactGroupController {
         private UUID workspaceId;
         private String name;
         private String description;
+        private List<String> fields;
+        private String status;
         private Instant createdAt;
     }
 

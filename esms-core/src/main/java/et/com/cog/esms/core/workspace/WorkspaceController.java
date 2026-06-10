@@ -27,6 +27,7 @@ public class WorkspaceController {
     private final RoleRepository roleRepo;
     private final et.com.cog.esms.core.identity.UserRepository userRepo;
     private final et.com.cog.esms.core.identity.WorkspaceMemberRepository memberRepo;
+    private final WorkspacePermissionRepository permissionRepo;
 
     // ── GET /workspaces ──────────────────────────────────────────
     @GetMapping
@@ -45,7 +46,11 @@ public class WorkspaceController {
         }
 
         List<WorkspaceDto> dtos = workspaces.stream()
-                .map(this::toDto)
+                .map(ws -> {
+                    List<String> perms = permissionRepo.findByWorkspaceId(ws.getId())
+                            .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
+                    return toDto(ws, perms);
+                })
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(dtos);
@@ -64,18 +69,47 @@ public class WorkspaceController {
                 .code(req.getCode())
                 .name(req.getName())
                 .kind(req.getKind() != null ? req.getKind() : "GENERIC")
+                .division(req.getDivision())
                 .status("ACTIVE")
                 .build();
 
-        ws = workspaceRepo.save(ws);
-        return ResponseEntity.status(HttpStatus.CREATED).body(toDto(ws));
+        Workspace savedWs = workspaceRepo.save(ws);
+
+        // Add permissions
+        if (req.getPermissions() != null) {
+            for (String perm : req.getPermissions()) {
+                permissionRepo.save(new WorkspacePermission(savedWs.getId(), perm));
+            }
+        }
+
+        // Assign Admin if provided
+        if (req.getAdminUserId() != null) {
+            roleRepo.findByCode("DEPT_HEAD").ifPresent(role -> {
+                userRepo.findById(req.getAdminUserId()).ifPresent(user -> {
+                    memberRepo.save(et.com.cog.esms.core.identity.WorkspaceMember.builder()
+                            .workspace(savedWs)
+                            .user(user)
+                            .role(role)
+                            .assignedAt(java.time.Instant.now())
+                            .assignedBy(WorkspaceContext.currentUserId())
+                            .build());
+                });
+            });
+        }
+
+        List<String> savedPerms = req.getPermissions() != null ? req.getPermissions() : List.of();
+        return ResponseEntity.status(HttpStatus.CREATED).body(toDto(savedWs, savedPerms));
     }
 
     // ── GET /workspaces/{id} ─────────────────────────────────────
     @GetMapping("/{id}")
     public ResponseEntity<WorkspaceDto> get(@PathVariable UUID id) {
         return workspaceRepo.findById(id)
-                .map(ws -> ResponseEntity.ok(toDto(ws)))
+                .map(ws -> {
+                    List<String> perms = permissionRepo.findByWorkspaceId(id)
+                            .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
+                    return ResponseEntity.ok(toDto(ws, perms));
+                })
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -87,12 +121,53 @@ public class WorkspaceController {
         return workspaceRepo.findById(id)
                 .map(ws -> {
                     if (updates.containsKey("name")) ws.setName((String) updates.get("name"));
+                    if (updates.containsKey("division")) ws.setDivision((String) updates.get("division"));
                     if (updates.containsKey("senderMask")) ws.setSenderMask((String) updates.get("senderMask"));
                     if (updates.containsKey("dailySmsLimit")) ws.setDailySmsLimit((Integer) updates.get("dailySmsLimit"));
                     workspaceRepo.save(ws);
-                    return ResponseEntity.ok(toDto(ws));
+                    
+                    if (updates.containsKey("permissions")) {
+                        @SuppressWarnings("unchecked")
+                        List<String> perms = (List<String>) updates.get("permissions");
+                        permissionRepo.deleteByWorkspaceId(id);
+                        for (String perm : perms) {
+                            permissionRepo.save(new WorkspacePermission(id, perm));
+                        }
+                    }
+
+                    List<String> currentPerms = permissionRepo.findByWorkspaceId(id)
+                            .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
+                    return ResponseEntity.ok(toDto(ws, currentPerms));
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    // ── POST /workspaces/{id}/deactivate ─────────────────────────
+    @PostMapping("/{id}/deactivate")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<?> deactivate(@PathVariable UUID id) {
+        return workspaceRepo.findById(id).map(ws -> {
+            ws.setStatus("SUSPENDED");
+            workspaceRepo.save(ws);
+            List<String> perms = permissionRepo.findByWorkspaceId(id)
+                    .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
+            return ResponseEntity.ok(toDto(ws, perms));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    // ── POST /workspaces/{id}/activate ───────────────────────────
+    @PostMapping("/{id}/activate")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<?> activate(@PathVariable UUID id) {
+        return workspaceRepo.findById(id).map(ws -> {
+            ws.setStatus("ACTIVE");
+            workspaceRepo.save(ws);
+            List<String> perms = permissionRepo.findByWorkspaceId(id)
+                    .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
+            return ResponseEntity.ok(toDto(ws, perms));
+        }).orElse(ResponseEntity.notFound().build());
     }
 
     // ── GET /workspaces/{id}/members ─────────────────────────────
@@ -145,9 +220,10 @@ public class WorkspaceController {
 
     // ── Helpers ──────────────────────────────────────────────────
 
-    private WorkspaceDto toDto(Workspace ws) {
+    private WorkspaceDto toDto(Workspace ws, List<String> permissions) {
         return new WorkspaceDto(ws.getId(), ws.getCode(), ws.getName(),
-                ws.getKind(), ws.getStatus(), ws.getSenderMask(), ws.getDailySmsLimit());
+                ws.getKind(), ws.getDivision(), ws.getStatus(), ws.getSenderMask(),
+                ws.getDailySmsLimit(), permissions);
     }
 
     // ── DTOs ─────────────────────────────────────────────────────
@@ -158,9 +234,11 @@ public class WorkspaceController {
         private String code;
         private String name;
         private String kind;
+        private String division;
         private String status;
         private String senderMask;
         private Integer dailySmsLimit;
+        private List<String> permissions;
     }
 
     @Data
@@ -168,6 +246,9 @@ public class WorkspaceController {
         @NotBlank private String code;
         @NotBlank private String name;
         private String kind;
+        private String division;
+        private UUID adminUserId;
+        private List<String> permissions;
     }
 
     @Data
