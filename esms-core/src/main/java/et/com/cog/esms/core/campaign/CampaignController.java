@@ -1,8 +1,10 @@
 package et.com.cog.esms.core.campaign;
 
+import et.com.cog.esms.core.messaging.MessageRepository;
 import et.com.cog.esms.core.security.WorkspaceContext;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -23,9 +25,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CampaignController {
 
-    private final CampaignService campaignService;
+    private final CampaignService  campaignService;
     private final CampaignRepository campaignRepo;
     private final et.com.cog.esms.core.identity.UserRepository userRepo;
+    private final MessageRepository messageRepo;
 
     @GetMapping
     @PreAuthorize("hasAuthority('CAMPAIGN_VIEW')")
@@ -98,9 +101,19 @@ public class CampaignController {
         String creatorName = c.getCreatedBy() != null ? userRepo.findById(c.getCreatedBy())
                 .map(et.com.cog.esms.core.identity.AppUser::getDisplayName).orElse(null) : null;
 
+        // Per-campaign delivery stats
+        long delivered  = messageRepo.countByCampaignIdAndStatusIn(c.getId(), List.of("DELIVERED"));
+        long failed     = messageRepo.countByCampaignIdAndStatusIn(c.getId(), List.of("FAILED"));
+        long sent       = messageRepo.countByCampaignIdAndStatusIn(c.getId(), List.of("SENT"));
+        long total      = messageRepo.countByCampaignId(c.getId());
+        double rate     = (sent + delivered) > 0
+                ? Math.round(1000.0 * delivered / (sent + delivered)) / 10.0 : 0.0;
+
         return new CampaignDto(c.getId(), c.getName(), c.getKind(), c.getStatus(),
                 c.getTemplateId(), c.getCustomBody(), c.getRecipientGroupId(), c.getUploadId(),
-                c.getRecipientCount(), c.getScheduledAt(), c.getCreatedBy(), creatorName, c.getCreatedAt(), c.getWorkspaceId());
+                c.getRecipientCount(), c.getScheduledAt(), c.getCreatedBy(), creatorName,
+                c.getCreatedAt(), c.getWorkspaceId(),
+                total, delivered, failed, rate);
     }
 
     private UUID resolveWorkspace(UUID overrideWsId) {
@@ -120,6 +133,9 @@ public class CampaignController {
     @Data
     public static class UpdateCampaignRequest {
         private String  name;
+        /** INSTANT | SCHEDULED | REMINDER */
+        @Pattern(regexp = "INSTANT|SCHEDULED|REMINDER",
+                 message = "kind must be one of: INSTANT, SCHEDULED, REMINDER")
         private String  kind;
         private UUID    templateId;
         private UUID    recipientGroupId;
@@ -131,7 +147,11 @@ public class CampaignController {
     @Data
     public static class CreateCampaignRequest {
         @NotBlank private String name;
-        @NotBlank private String kind;
+        /** INSTANT | SCHEDULED | REMINDER */
+        @NotBlank
+        @Pattern(regexp = "INSTANT|SCHEDULED|REMINDER",
+                 message = "kind must be one of: INSTANT, SCHEDULED, REMINDER")
+        private String kind;
         private UUID templateId;
         private UUID recipientGroupId;
         private UUID uploadId;
@@ -146,19 +166,25 @@ public class CampaignController {
 
     @Data @AllArgsConstructor
     public static class CampaignDto {
-        private UUID id;
-        private String name;
-        private String kind;
-        private String status;
-        private UUID templateId;
-        private String customBody;
-        private UUID recipientGroupId;
-        private UUID uploadId;
+        private UUID    id;
+        private String  name;
+        /** INSTANT | SCHEDULED | REMINDER */
+        private String  kind;
+        private String  status;
+        private UUID    templateId;
+        private String  customBody;
+        private UUID    recipientGroupId;
+        private UUID    uploadId;
         private Integer recipientCount;
         private Instant scheduledAt;
-        private UUID createdBy;
-        private String creatorName;
+        private UUID    createdBy;
+        private String  creatorName;
         private Instant createdAt;
-        private UUID workspaceId;
+        private UUID    workspaceId;
+        // ── inline delivery stats ──
+        private long    totalMessages;
+        private long    deliveredMessages;
+        private long    failedMessages;
+        private double  deliveryRatePct;
     }
 }

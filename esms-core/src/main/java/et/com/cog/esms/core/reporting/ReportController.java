@@ -3,6 +3,11 @@ package et.com.cog.esms.core.reporting;
 import et.com.cog.esms.core.reporting.ReportService.CampaignSummaryDto;
 import et.com.cog.esms.core.reporting.ReportService.DailyTrendDto;
 import et.com.cog.esms.core.security.WorkspaceContext;
+import et.com.cog.esms.core.identity.UserActivityLogRepository;
+import et.com.cog.esms.core.identity.UserRepository;
+import et.com.cog.esms.core.identity.WorkspaceMemberRepository;
+import et.com.cog.esms.core.campaign.CampaignRepository;
+import et.com.cog.esms.core.workspace.WorkspaceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -17,8 +22,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.File;
 import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Reporting REST controller.
@@ -34,7 +40,13 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ReportController {
 
-    private final ReportService reportService;
+    private final ReportService              reportService;
+    private final UserActivityLogRepository  activityLogRepo;
+    private final UserRepository             userRepo;
+    private final WorkspaceRepository        workspaceRepo;
+    private final CampaignRepository         campaignRepo;
+    private final et.com.cog.esms.core.messaging.MessageRepository messageRepo;
+    private final WorkspaceMemberRepository  memberRepo;
 
     /**
      * Delivery dashboard.
@@ -174,6 +186,99 @@ public class ReportController {
 
         UUID wsId = resolveWorkspace(workspaceId);
         return ResponseEntity.ok(reportService.getCampaignSummaries(wsId, from, to));
+    }
+
+    // ── Dashboard summary ──────────────────────────────────────────────
+
+    /**
+     * Single dashboard-summary endpoint.
+     * For SUPER_ADMIN with no workspaceId: returns platform-wide aggregates.
+     * For workspace users (or SUPER_ADMIN with ?workspaceId=): returns per-workspace totals.
+     *
+     * Response shape:
+     * {
+     *   totalMessages, sentMessages, deliveredMessages, failedMessages,
+     *   deliveryRatePct, totalCampaigns, activeWorkspaces, totalUsers,
+     *   activeUsers30d
+     * }
+     */
+    @GetMapping("/dashboard/summary")
+    @PreAuthorize("hasAnyAuthority('REPORT_VIEW','REPORT_EXPORT')")
+    public ResponseEntity<Map<String, Object>> getDashboardSummary(
+            @RequestParam(required = false) UUID workspaceId) {
+
+        UUID wsId = resolveWorkspace(workspaceId);
+
+        long totalMessages    = messageRepo.countByWorkspaceIdAndStatus(wsId, "SENT")
+                              + messageRepo.countByWorkspaceIdAndStatus(wsId, "DELIVERED")
+                              + messageRepo.countByWorkspaceIdAndStatus(wsId, "FAILED")
+                              + messageRepo.countByWorkspaceIdAndStatus(wsId, "PENDING")
+                              + messageRepo.countByWorkspaceIdAndStatus(wsId, "QUEUED");
+        long delivered        = messageRepo.countByWorkspaceIdAndStatus(wsId, "DELIVERED");
+        long failed           = messageRepo.countByWorkspaceIdAndStatus(wsId, "FAILED");
+        long sent             = messageRepo.countByWorkspaceIdAndStatus(wsId, "SENT");
+
+        double deliveryRate   = (sent + delivered) > 0
+                ? Math.round(1000.0 * delivered / (sent + delivered)) / 10.0 : 0.0;
+
+        long totalCampaigns   = wsId == null
+                ? campaignRepo.count()
+                : campaignRepo.findByWorkspaceIdOrderByCreatedAtDesc(wsId).size();
+
+        long activeWorkspaces = wsId == null
+                ? workspaceRepo.findAll().stream().filter(w -> "ACTIVE".equals(w.getStatus())).count()
+                : ("ACTIVE".equals(workspaceRepo.findById(wsId).map(w -> w.getStatus()).orElse("")) ? 1L : 0L);
+
+        Instant thirtyDaysAgo = Instant.now().minus(30, ChronoUnit.DAYS);
+        long activeUsers30d   = activityLogRepo.countActiveUsersSince(wsId, thirtyDaysAgo);
+
+        long totalUsers       = wsId == null
+                ? userRepo.count()
+                : memberRepo.countByWorkspaceId(wsId);
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("totalMessages",    totalMessages);
+        summary.put("sentMessages",     sent);
+        summary.put("deliveredMessages",delivered);
+        summary.put("failedMessages",   failed);
+        summary.put("deliveryRatePct",  deliveryRate);
+        summary.put("totalCampaigns",   totalCampaigns);
+        summary.put("activeWorkspaces", activeWorkspaces);
+        summary.put("activeUsers30d",   activeUsers30d);
+        summary.put("totalUsers",       totalUsers);
+        summary.put("workspaceId",      wsId);
+
+        return ResponseEntity.ok(summary);
+    }
+
+    // ── Users & Access activity analytics ─────────────────────────────
+
+    /**
+     * Action frequency chart data for Reports → Users &amp; Access tab.
+     * Returns [ { action: "LOGIN", total: 42 }, … ] sorted by frequency.
+     *
+     * Optional: ?workspaceId= for SUPER_ADMIN cross-workspace, ?days=30 for time window.
+     */
+    @GetMapping("/users-activity")
+    @PreAuthorize("hasAnyAuthority('REPORT_VIEW','REPORT_EXPORT')")
+    public ResponseEntity<List<Map<String, Object>>> getUsersActivity(
+            @RequestParam(required = false) UUID workspaceId,
+            @RequestParam(defaultValue = "30") int days) {
+
+        UUID wsId = resolveWorkspace(workspaceId);
+        Instant since = Instant.now().minus(days, ChronoUnit.DAYS);
+
+        List<Map<String, Object>> result = activityLogRepo.findActionFrequency(wsId, since)
+                .stream()
+                .map(p -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("action", p.getAction());
+                    m.put("total",  p.getTotal());
+                    return m;
+                })
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(result);
     }
 
     // ── inline DTOs ────────────────────────────────────────────────────────

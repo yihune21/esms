@@ -143,22 +143,55 @@ public class UserController {
     // ── Helpers ──────────────────────────────────────────────────
 
     private UserDto toDto(AppUser u) {
-        return new UserDto(u.getId(), u.getUsername(), u.getDisplayName(),
-                u.getEmail(), u.getStatus(), u.getLastLoginAt(), u.getCreatedAt(), u.getUpdatedAt());
+        // Inline memberships for the All Users grid
+        List<MembershipDto> memberships = memberRepo.findByUserId(u.getId()).stream()
+                .map(m -> new MembershipDto(
+                        m.getWorkspace().getId(),
+                        m.getWorkspace().getName(),
+                        m.getWorkspace().getDivision(),
+                        m.getRole().getCode(),
+                        m.getAssignedAt()
+                ))
+                .collect(Collectors.toList());
+
+        // Derive primary workspace info from first membership (if any)
+        String primaryRole      = memberships.isEmpty() ? null : memberships.get(0).getRole();
+        String primaryWorkspace = memberships.isEmpty() ? null : memberships.get(0).getWorkspaceName();
+        String division         = memberships.isEmpty() ? null : memberships.get(0).getDivision();
+
+        return new UserDto(
+                u.getId(), u.getUsername(), u.getDisplayName(), u.getEmail(),
+                u.getStatus(), u.getLastLoginAt(), u.getCreatedAt(), u.getUpdatedAt(),
+                primaryRole, primaryWorkspace, division, memberships
+        );
     }
 
-    // ── DTOs ─────────────────────────────────────────────────────
+    // ── DTOs ──────────────────────────────────────────────────
 
     @Data @AllArgsConstructor
     public static class UserDto {
-        private UUID id;
-        private String username;
-        private String displayName;
-        private String email;
-        private String status;
+        private UUID    id;
+        private String  username;
+        private String  displayName;
+        private String  email;
+        private String  status;
         private Instant lastLoginAt;
         private Instant createdAt;
         private Instant updatedAt;
+        // ── enriched ──
+        private String  primaryRole;
+        private String  primaryWorkspace;
+        private String  division;
+        private List<MembershipDto> memberships;
+    }
+
+    @Data @AllArgsConstructor
+    public static class MembershipDto {
+        private UUID    workspaceId;
+        private String  workspaceName;
+        private String  division;
+        private String  role;
+        private Instant assignedAt;
     }
 
     @Data

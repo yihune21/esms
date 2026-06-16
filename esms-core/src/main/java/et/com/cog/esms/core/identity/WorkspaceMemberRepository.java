@@ -19,4 +19,6 @@ public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember
     Optional<WorkspaceMember> findByWorkspaceIdAndUserId(UUID workspaceId, UUID userId);
 
     void deleteByWorkspaceIdAndUserId(UUID workspaceId, UUID userId);
+
+    long countByWorkspaceId(UUID workspaceId);
 }

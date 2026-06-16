@@ -29,9 +29,14 @@
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/contact/ExcelUploadService.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/AppUser.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/AuthController.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/Delegation.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/DelegationController.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/DelegationRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/LockoutService.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/OtpService.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/SessionService.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/UserActivityLog.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/UserActivityLogRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/UserController.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/UserRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/identity/WorkspaceMember.java

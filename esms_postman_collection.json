@@ -651,6 +651,47 @@
             "description": "Removes a member from a workspace. Requires WORKSPACE_MEMBER_REMOVE authority."
           },
           "response": []
+        },
+        {
+          "name": "PATCH /workspaces/{id}/members/{userId}",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleId\": \"<role_uuid>\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/members/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "members",
+                "{{userId}}"
+              ]
+            },
+            "description": "Updates a workspace member's role. Requires WORKSPACE_MEMBER_ADD authority."
+          },
+          "response": []
         }
       ]
     },
@@ -1111,6 +1152,94 @@
               ]
             }
           }
+        },
+        {
+          "name": "GET /groups/{id}/uploads (Upload History)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{group_id}}/uploads",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{group_id}}",
+                "uploads"
+              ]
+            },
+            "description": "Exposes detailed upload history list for a contact group."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /groups/{id}/members/export (Export Members)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{group_id}}/members/export",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{group_id}}",
+                "members",
+                "export"
+              ]
+            },
+            "description": "Exports a CSV stream of contact group members."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /groups/uploads (Standalone Upload)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/groups/uploads",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "uploads"
+              ]
+            },
+            "description": "Direct standalone recipient upload endpoint returning ContactUpload metadata."
+          },
+          "response": []
         }
       ]
     },
@@ -1988,6 +2117,72 @@
               ]
             }
           }
+        },
+        {
+          "name": "GET /reports/dashboard/summary (Dashboard Summary)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/dashboard/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "dashboard",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "workspaceId",
+                  "value": "",
+                  "disabled": true,
+                  "description": "SUPER_ADMIN only \u2014 omit for current workspace"
+                }
+              ]
+            },
+            "description": "Single-request dashboard summary aggregating message status counters, campaign count, active workspaces, and user metrics."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /reports/users-activity (Users Activity Analytics)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/users-activity?days=30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "users-activity"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Exposes action frequency analytics from UserActivityLog for chart/reporting use."
+          },
+          "response": []
         }
       ]
     },
@@ -2313,6 +2508,107 @@
               ]
             },
             "description": "Delete a carrier prefix rule."
+          },
+          "response": []
+        }
+      ],
+      "type": "folder"
+    },
+    {
+      "name": "Delegations",
+      "item": [
+        {
+          "name": "GET /delegations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/delegations?activeOnly=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "delegations"
+              ],
+              "query": [
+                {
+                  "key": "activeOnly",
+                  "value": "true",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "List all delegations for the current workspace. Can filter by activeOnly."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /delegations",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"toUserId\": \"<delegatee_user_uuid>\",\n  \"startsAt\": \"2026-06-16T10:00:00Z\",\n  \"endsAt\": \"2026-06-20T10:00:00Z\",\n  \"reason\": \"Vacation coverage\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/delegations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "delegations"
+              ]
+            },
+            "description": "Create a new role/permission delegation. Requires ADMIN_DELEGATE authority."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /delegations/{id}/revoke",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/delegations/{{delegationId}}/revoke",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "delegations",
+                "{{delegationId}}",
+                "revoke"
+              ]
+            },
+            "description": "Revoke an active delegation. Requires ADMIN_DELEGATE authority."
           },
           "response": []
         }

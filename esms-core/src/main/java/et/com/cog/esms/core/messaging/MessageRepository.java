@@ -38,6 +38,11 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
 
     long countByCampaignId(UUID campaignId);
 
+    long countByWorkspaceId(UUID workspaceId);
+
+    @Query("SELECT COUNT(DISTINCT m.workspaceId) FROM Message m")
+    long countDistinctWorkspaces();
+
     // ── Reporting queries ─────────────────────────────────────────────────
 
     @Query("SELECT COUNT(m) FROM Message m WHERE (:wsId IS NULL OR m.workspaceId = :wsId) AND m.status = :status")

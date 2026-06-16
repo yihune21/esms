@@ -1,24 +1,28 @@
 package et.com.cog.esms.core.contact;
 
+import et.com.cog.esms.core.identity.UserRepository;
 import et.com.cog.esms.core.security.WorkspaceContext;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintWriter;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Contact-group CRUD and membership management.
- * Groups are used as campaign recipient lists (recipient_group_id on campaign).
+ * Contact-group CRUD + membership + upload history + export.
  * Reference: LLD §4.3
  */
 @Slf4j
@@ -27,10 +31,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ContactGroupController {
 
-    private final ContactGroupRepository groupRepo;
+    private final ContactGroupRepository      groupRepo;
     private final ContactGroupMemberRepository memberRepo;
-    private final ContactRepository contactRepo;
-    private final ExcelUploadService excelUploadService;
+    private final ContactRepository           contactRepo;
+    private final ContactUploadRepository     uploadRepo;
+    private final ExcelUploadService          excelUploadService;
+    private final UserRepository              userRepo;
 
     // ── GET /groups ──────────────────────────────────────────────
     @GetMapping
@@ -183,7 +189,7 @@ public class ContactGroupController {
             return ResponseEntity.notFound().build();
         }
 
-        UUID wsId = WorkspaceContext.currentWorkspaceId();
+        UUID wsId   = WorkspaceContext.currentWorkspaceId();
         UUID userId = WorkspaceContext.currentUserId();
 
         ContactUpload upload = excelUploadService.parseAndImport(wsId, userId, file, id);
@@ -192,7 +198,7 @@ public class ContactGroupController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(upload);
         }
 
-        // Update group fields based on uploaded mapping
+        // Update group's known dynamic fields from this upload's headers
         if (upload.getMapping() != null && !upload.getMapping().isEmpty()) {
             groupRepo.findById(id).ifPresent(group -> {
                 List<String> currentFields = new ArrayList<>(group.getFields() != null ? group.getFields() : new ArrayList<>());
@@ -207,24 +213,175 @@ public class ContactGroupController {
         return ResponseEntity.ok(upload);
     }
 
+    // ── POST /uploads  (standalone — no group required) ──────────
+    /**
+     * Standalone recipients upload. Parses the file without attaching it to a group.
+     * Returns a ContactUpload record with an uploadId the campaign composer can reference.
+     */
+    @PostMapping("/uploads")
+    @PreAuthorize("hasAuthority('CONTACT_UPLOAD')")
+    public ResponseEntity<?> standaloneUpload(@RequestParam("file") MultipartFile file) {
+        UUID wsId   = WorkspaceContext.currentWorkspaceId();
+        UUID userId = WorkspaceContext.currentUserId();
+
+        // groupId = null → contacts created but not attached to any named group
+        ContactUpload upload = excelUploadService.parseAndImport(wsId, userId, file, null);
+
+        if ("FAILED".equals(upload.getStatus())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(upload);
+        }
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(upload);
+    }
+
+    // ── GET /groups/{id}/uploads  (upload history) ───────────────
+    @GetMapping("/{id}/uploads")
+    @PreAuthorize("hasAuthority('CONTACT_VIEW')")
+    public ResponseEntity<List<UploadHistoryDto>> uploadHistory(@PathVariable UUID id) {
+        if (!groupRepo.existsById(id)) return ResponseEntity.notFound().build();
+
+        List<UploadHistoryDto> history = uploadRepo.findByGroupIdOrderByCreatedAtDesc(id)
+                .stream()
+                .map(u -> {
+                    String uploaderName = userRepo.findById(u.getUploadedBy())
+                            .map(user -> user.getDisplayName()).orElse(null);
+                    return new UploadHistoryDto(
+                            u.getId(), u.getOriginalName(), u.getFileSize(),
+                            u.getStatus(), u.getRowCount(), u.getImportedCount(),
+                            u.getDuplicateCount(), u.getErrorCount(),
+                            u.getUploadedBy(), uploaderName,
+                            u.getCreatedAt(), u.getCompletedAt()
+                    );
+                })
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(history);
+    }
+
+    // ── GET /groups/{id}/members/export  (CSV export) ────────────
+    @GetMapping("/{id}/members/export")
+    @PreAuthorize("hasAuthority('CONTACT_VIEW')")
+    public ResponseEntity<byte[]> exportMembers(@PathVariable UUID id) {
+        if (!groupRepo.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        // Collect all contacts in this group
+        List<Map<String, Object>> rows = memberRepo.findByGroupId(id).stream()
+                .map(m -> contactRepo.findById(m.getContactId()).orElse(null))
+                .filter(Objects::nonNull)
+                .map(c -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", c.getId().toString());
+                    row.put("name", c.getName());
+                    row.put("phoneE164", c.getPhoneE164());
+                    row.put("branch", c.getBranch() != null ? c.getBranch() : "");
+                    row.put("optOut", String.valueOf(c.isOptOut()));
+                    row.put("status", c.getStatus());
+                    if (c.getExtra() != null) row.putAll(c.getExtra());
+                    return row;
+                })
+                .collect(Collectors.toList());
+
+        if (rows.isEmpty()) {
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"group_members.csv\"")
+                    .contentType(MediaType.parseMediaType("text/csv"))
+                    .body("id,name,phoneE164,branch,optOut,status\n".getBytes());
+        }
+
+        // Build CSV
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (PrintWriter pw = new PrintWriter(baos)) {
+            // Header row from the first record's key set
+            Set<String> keys = rows.get(0).keySet();
+            pw.println(String.join(",", keys));
+
+            for (Map<String, Object> row : rows) {
+                String line = keys.stream()
+                        .map(k -> {
+                            Object v = row.get(k);
+                            String s = v != null ? v.toString().replace("\"", "\"\"") : "";
+                            return "\"" + s + "\"";
+                        })
+                        .collect(Collectors.joining(","));
+                pw.println(line);
+            }
+        }
+
+        byte[] csv = baos.toByteArray();
+
+        groupRepo.findById(id).ifPresent(g ->
+                log.info("Exported {} members from group '{}' ({})", rows.size(), g.getName(), id));
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"group_" + id + "_members.csv\"")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csv);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────
 
     private GroupDto toDto(ContactGroup g) {
-        return new GroupDto(g.getId(), g.getWorkspaceId(), g.getName(),
-                g.getDescription(), g.getFields(), g.getStatus(), g.getCreatedAt());
+        // Count members and latest upload metadata for this group
+        long memberCount  = memberRepo.countByGroupId(g.getId());
+        long uploadCount  = uploadRepo.countByGroupId(g.getId());
+
+        // Latest upload info (for the GroupDto summary)
+        ContactUpload latestUpload = uploadRepo.findByGroupIdOrderByCreatedAtDesc(g.getId())
+                .stream().findFirst().orElse(null);
+
+        String originalFileName  = latestUpload != null ? latestUpload.getOriginalName() : null;
+        Integer recordCount      = latestUpload != null ? latestUpload.getImportedCount() : null;
+        UUID uploadedBy          = latestUpload != null ? latestUpload.getUploadedBy() : null;
+        String uploadedByName    = uploadedBy != null
+                ? userRepo.findById(uploadedBy).map(u -> u.getDisplayName()).orElse(null) : null;
+        Instant uploadDate       = latestUpload != null ? latestUpload.getCreatedAt() : null;
+
+        return new GroupDto(
+                g.getId(), g.getWorkspaceId(), g.getName(), g.getDescription(),
+                g.getFields(), g.getStatus(), g.getCreatedAt(),
+                (int) memberCount, originalFileName, recordCount,
+                uploadedBy, uploadedByName, uploadDate, (int) uploadCount
+        );
     }
 
     // ── DTOs ─────────────────────────────────────────────────────
 
     @Data @AllArgsConstructor
     public static class GroupDto {
-        private UUID id;
-        private UUID workspaceId;
-        private String name;
-        private String description;
+        private UUID        id;
+        private UUID        workspaceId;
+        private String      name;
+        private String      description;
         private List<String> fields;
-        private String status;
+        private String      status;
+        private Instant     createdAt;
+        // ── enriched fields ──
+        private int         memberCount;
+        private String      originalFileName;
+        private Integer     recordCount;
+        private UUID        uploadedBy;
+        private String      uploadedByName;
+        private Instant     uploadDate;
+        private int         uploadCount;
+    }
+
+    @Data @AllArgsConstructor
+    public static class UploadHistoryDto {
+        private UUID    id;
+        private String  originalFileName;
+        private Long    fileSize;
+        private String  status;
+        private Integer rowCount;
+        private Integer importedCount;
+        private Integer duplicateCount;
+        private Integer errorCount;
+        private UUID    uploadedBy;
+        private String  uploadedByName;
         private Instant createdAt;
+        private Instant completedAt;
     }
 
     @Data

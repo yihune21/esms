@@ -49,7 +49,7 @@ public class WorkspaceController {
                 .map(ws -> {
                     List<String> perms = permissionRepo.findByWorkspaceId(ws.getId())
                             .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
-                    return toDto(ws, perms);
+                    return toDtoEnriched(ws, perms);
                 })
                 .collect(Collectors.toList());
 
@@ -108,7 +108,7 @@ public class WorkspaceController {
                 .map(ws -> {
                     List<String> perms = permissionRepo.findByWorkspaceId(id)
                             .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
-                    return ResponseEntity.ok(toDto(ws, perms));
+                    return ResponseEntity.ok(toDtoEnriched(ws, perms));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -243,6 +243,38 @@ public class WorkspaceController {
                 .body(Map.of("message", "Member added"));
     }
 
+    // ── PATCH /workspaces/{id}/members/{userId} ──────────────────
+    /** Change a member's role without removing and re-adding them. */
+    @PatchMapping("/{id}/members/{userId}")
+    @PreAuthorize("hasAuthority('WORKSPACE_MEMBER_ADD')")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<?> changeMemberRole(@PathVariable UUID id,
+                                              @PathVariable UUID userId,
+                                              @RequestBody Map<String, Object> body) {
+        var memberOpt = memberRepo.findByWorkspaceIdAndUserId(id, userId);
+        if (memberOpt.isEmpty()) return ResponseEntity.notFound().build();
+
+        String roleIdStr = (String) body.get("roleId");
+        if (roleIdStr == null) {
+            return ResponseEntity.badRequest().body(Map.of("title", "roleId is required"));
+        }
+
+        var roleOpt = roleRepo.findById(UUID.fromString(roleIdStr));
+        if (roleOpt.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("title", "Role not found"));
+        }
+
+        var member = memberOpt.get();
+        member.setRole(roleOpt.get());
+        memberRepo.save(member);
+
+        return ResponseEntity.ok(Map.of(
+                "userId", userId,
+                "workspaceId", id,
+                "role", roleOpt.get().getCode()
+        ));
+    }
+
     // ── DELETE /workspaces/{id}/members/{userId} ─────────────────
     @DeleteMapping("/{id}/members/{userId}")
     @PreAuthorize("hasAuthority('WORKSPACE_MEMBER_REMOVE')")
@@ -257,25 +289,49 @@ public class WorkspaceController {
 
     // ── Helpers ──────────────────────────────────────────────────
 
+    /** Basic DTO without enrichment (used internally). */
     private WorkspaceDto toDto(Workspace ws, List<String> permissions) {
+        return toDtoEnriched(ws, permissions);
+    }
+
+    /** Enriched DTO with memberCount + admin name (no N+1 — uses one count query + one member lookup). */
+    private WorkspaceDto toDtoEnriched(Workspace ws, List<String> permissions) {
+        long memberCount = memberRepo.findByWorkspaceId(ws.getId()).size();
+
+        // Find the DEPT_HEAD of this workspace
+        String adminName = memberRepo.findByWorkspaceId(ws.getId()).stream()
+                .filter(m -> "DEPT_HEAD".equals(m.getRole().getCode()))
+                .findFirst()
+                .map(m -> m.getUser().getDisplayName())
+                .orElse(null);
+        UUID adminUserId = memberRepo.findByWorkspaceId(ws.getId()).stream()
+                .filter(m -> "DEPT_HEAD".equals(m.getRole().getCode()))
+                .findFirst()
+                .map(m -> m.getUser().getId())
+                .orElse(null);
+
         return new WorkspaceDto(ws.getId(), ws.getCode(), ws.getName(),
                 ws.getKind(), ws.getDivision(), ws.getStatus(), ws.getSenderMask(),
-                ws.getDailySmsLimit(), permissions);
+                ws.getDailySmsLimit(), permissions, (int) memberCount, adminName, adminUserId);
     }
 
     // ── DTOs ─────────────────────────────────────────────────────
 
     @Data @AllArgsConstructor
     public static class WorkspaceDto {
-        private UUID id;
-        private String code;
-        private String name;
-        private String kind;
-        private String division;
-        private String status;
-        private String senderMask;
-        private Integer dailySmsLimit;
+        private UUID         id;
+        private String       code;
+        private String       name;
+        private String       kind;
+        private String       division;
+        private String       status;
+        private String       senderMask;
+        private Integer      dailySmsLimit;
         private List<String> permissions;
+        // ── enriched ──
+        private int          memberCount;
+        private String       adminName;
+        private UUID         adminUserId;
     }
 
     @Data

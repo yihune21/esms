@@ -68,6 +68,9 @@ public class ContactUpload {
     @Column(columnDefinition = "jsonb")
     private List<Map<String, Object>> errors;
 
+    @Column(name = "group_id")
+    private UUID groupId;
+
     @Column(name = "uploaded_by", nullable = false)
     private UUID uploadedBy;
 

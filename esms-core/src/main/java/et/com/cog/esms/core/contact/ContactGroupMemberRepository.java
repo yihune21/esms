@@ -14,4 +14,6 @@ public interface ContactGroupMemberRepository extends JpaRepository<ContactGroup
     boolean existsByGroupIdAndContactId(UUID groupId, UUID contactId);
 
     void deleteByGroupIdAndContactId(UUID groupId, UUID contactId);
+
+    long countByGroupId(UUID groupId);
 }

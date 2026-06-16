@@ -42,6 +42,7 @@ public class ExcelUploadService {
                 .originalName(file.getOriginalFilename())
                 .fileSize(file.getSize())
                 .contentType(file.getContentType() != null ? file.getContentType() : "application/octet-stream")
+                .groupId(groupId)
                 .status("DRAFT")
                 .uploadedBy(uploadedBy)
                 .build();

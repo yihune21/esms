@@ -10,4 +10,8 @@ import java.util.UUID;
 public interface ContactUploadRepository extends JpaRepository<ContactUpload, UUID> {
 
     List<ContactUpload> findByWorkspaceIdOrderByCreatedAtDesc(UUID workspaceId);
+
+    List<ContactUpload> findByGroupIdOrderByCreatedAtDesc(UUID groupId);
+
+    long countByGroupId(UUID groupId);
 }
