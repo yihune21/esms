@@ -25,15 +25,22 @@ public class CampaignController {
 
     private final CampaignService campaignService;
     private final CampaignRepository campaignRepo;
+    private final et.com.cog.esms.core.identity.UserRepository userRepo;
 
     @GetMapping
     @PreAuthorize("hasAuthority('CAMPAIGN_VIEW')")
     public ResponseEntity<List<CampaignDto>> list(
-            @RequestParam(required = false) String status) {
-        UUID wsId = WorkspaceContext.currentWorkspaceId();
-        List<Campaign> campaigns = status != null
-                ? campaignRepo.findByWorkspaceIdAndStatus(wsId, status)
-                : campaignRepo.findByWorkspaceIdOrderByCreatedAtDesc(wsId);
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) UUID workspaceId) {
+        UUID wsId = resolveWorkspace(workspaceId);
+        List<Campaign> campaigns;
+        if (wsId == null) {
+            campaigns = status != null ? campaignRepo.findByStatus(status) : campaignRepo.findAll();
+        } else {
+            campaigns = status != null
+                    ? campaignRepo.findByWorkspaceIdAndStatus(wsId, status)
+                    : campaignRepo.findByWorkspaceIdOrderByCreatedAtDesc(wsId);
+        }
         return ResponseEntity.ok(campaigns.stream().map(this::toDto).collect(Collectors.toList()));
     }
 
@@ -88,9 +95,26 @@ public class CampaignController {
     }
 
     private CampaignDto toDto(Campaign c) {
+        String creatorName = c.getCreatedBy() != null ? userRepo.findById(c.getCreatedBy())
+                .map(et.com.cog.esms.core.identity.AppUser::getDisplayName).orElse(null) : null;
+
         return new CampaignDto(c.getId(), c.getName(), c.getKind(), c.getStatus(),
                 c.getTemplateId(), c.getCustomBody(), c.getRecipientGroupId(), c.getUploadId(),
-                c.getRecipientCount(), c.getScheduledAt(), c.getCreatedAt());
+                c.getRecipientCount(), c.getScheduledAt(), c.getCreatedBy(), creatorName, c.getCreatedAt(), c.getWorkspaceId());
+    }
+
+    private UUID resolveWorkspace(UUID overrideWsId) {
+        boolean isSuperAdmin = org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .getAuthentication().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"));
+
+        if (isSuperAdmin && "00000000-0000-0000-0000-000000000000".equals(String.valueOf(overrideWsId))) {
+            return null; // Platform-level aggregation
+        }
+        if (isSuperAdmin && overrideWsId != null) {
+            return overrideWsId;
+        }
+        return WorkspaceContext.currentWorkspaceId();
     }
 
     @Data
@@ -132,6 +156,9 @@ public class CampaignController {
         private UUID uploadId;
         private Integer recipientCount;
         private Instant scheduledAt;
+        private UUID createdBy;
+        private String creatorName;
         private Instant createdAt;
+        private UUID workspaceId;
     }
 }

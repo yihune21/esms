@@ -29,8 +29,17 @@ public class Schedule {
     @Column(name = "workspace_id", nullable = false)
     private UUID workspaceId;
 
-    @Column(name = "policy_id", nullable = false)
-    private UUID policyId;
+    @Column(nullable = false)
+    private String name;
+
+    @Column(name = "recipient_group_id")
+    private UUID recipientGroupId;
+
+    @Column(name = "upload_id")
+    private UUID uploadId;
+
+    @Column(name = "custom_body")
+    private String customBody;
 
     /**
      * T_MINUS_30 | T_MINUS_10 | CUSTOM
@@ -38,14 +47,11 @@ public class Schedule {
     @Column(nullable = false)
     private String kind;
 
-    @Column(name = "due_date", nullable = false)
-    private LocalDate dueDate;
-
     @Column(name = "template_id", nullable = false)
     private UUID templateId;
 
     /**
-     * PENDING | FIRED | CANCELLED
+     * ACTIVE | INACTIVE
      */
     @Column(nullable = false)
     private String status;

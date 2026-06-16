@@ -2,6 +2,7 @@ package et.com.cog.esms.core.schedule;
 
 import et.com.cog.esms.core.security.WorkspaceContext;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -41,10 +42,13 @@ public class ScheduleController {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
         Schedule s = scheduleService.create(
                 wsId,
-                req.getPolicyId(),
+                req.getName(),
+                req.getRecipientGroupId(),
+                req.getUploadId(),
+                req.getTemplateId(),
+                req.getCustomBody(),
                 req.getKind(),
-                req.getDueDate(),
-                req.getTemplateId());
+                req.isSendNow());
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(s));
     }
 
@@ -67,11 +71,26 @@ public class ScheduleController {
         return ResponseEntity.ok(toDto(scheduleService.getById(wsId, id)));
     }
 
-    @PostMapping("/{id}/cancel")
+    @PostMapping("/{id}/deactivate")
     @PreAuthorize("hasAuthority('SCHEDULE_MANAGE')")
-    public ResponseEntity<ScheduleDto> cancel(@PathVariable UUID id) {
+    public ResponseEntity<ScheduleDto> deactivate(@PathVariable UUID id) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
-        return ResponseEntity.ok(toDto(scheduleService.cancel(wsId, id)));
+        return ResponseEntity.ok(toDto(scheduleService.deactivate(wsId, id)));
+    }
+
+    @PostMapping("/{id}/activate")
+    @PreAuthorize("hasAuthority('SCHEDULE_MANAGE')")
+    public ResponseEntity<ScheduleDto> activate(@PathVariable UUID id) {
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
+        return ResponseEntity.ok(toDto(scheduleService.activate(wsId, id)));
+    }
+
+    @PostMapping("/{id}/trigger")
+    @PreAuthorize("hasAuthority('SCHEDULE_MANAGE')")
+    public ResponseEntity<?> trigger(@PathVariable UUID id) {
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
+        scheduleService.trigger(wsId, id);
+        return ResponseEntity.accepted().build();
     }
 
     // ── DTO mapping ──────────────────────────────────────────────────────────
@@ -80,13 +99,13 @@ public class ScheduleController {
         return new ScheduleDto(
                 s.getId(),
                 s.getWorkspaceId(),
-                s.getPolicyId(),
-                s.getKind(),
-                s.getDueDate(),
+                s.getName(),
+                s.getRecipientGroupId(),
+                s.getUploadId(),
                 s.getTemplateId(),
+                s.getCustomBody(),
+                s.getKind(),
                 s.getStatus(),
-                s.getFiredAt(),
-                s.getCancelledAt(),
                 s.getCreatedAt()
         );
     }
@@ -95,22 +114,25 @@ public class ScheduleController {
 
     @Data
     public static class CreateScheduleRequest {
-        @NotNull private UUID      policyId;
-        @NotNull private String    kind;       // T_MINUS_30 | T_MINUS_10 | CUSTOM
-        @NotNull private LocalDate dueDate;
-        @NotNull private UUID      templateId;
+        @NotBlank private String name;
+        private UUID      recipientGroupId;
+        private UUID      uploadId;
+        private UUID      templateId;
+        private String    customBody;
+        private String    kind;       // T_MINUS_30 | T_MINUS_10 | CUSTOM
+        private boolean   sendNow;
     }
 
     record ScheduleDto(
             UUID      id,
             UUID      workspaceId,
-            UUID      policyId,
-            String    kind,
-            LocalDate dueDate,
+            String    name,
+            UUID      recipientGroupId,
+            UUID      uploadId,
             UUID      templateId,
+            String    customBody,
+            String    kind,
             String    status,
-            Instant   firedAt,
-            Instant   cancelledAt,
             Instant   createdAt
     ) {}
 }

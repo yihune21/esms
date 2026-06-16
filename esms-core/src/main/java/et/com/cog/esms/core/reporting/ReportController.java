@@ -56,10 +56,11 @@ public class ReportController {
             @RequestParam(required = false) UUID campaignId,
             @RequestParam(required = false) String branch,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) UUID workspaceId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        UUID wsId = WorkspaceContext.currentWorkspaceId();
+        UUID wsId = resolveWorkspace(workspaceId);
         PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
 
         DeliveryReport report = reportService.getDeliveryReport(
@@ -148,9 +149,10 @@ public class ReportController {
     @PreAuthorize("hasAnyAuthority('REPORT_VIEW','REPORT_EXPORT')")
     public ResponseEntity<List<DailyTrendDto>> getDailyTrend(
             @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) UUID workspaceId,
             @RequestParam(required = false) Instant to) {
 
-        UUID wsId = WorkspaceContext.currentWorkspaceId();
+        UUID wsId = resolveWorkspace(workspaceId);
         return ResponseEntity.ok(reportService.getDailyTrend(wsId, from, to));
     }
 
@@ -167,13 +169,28 @@ public class ReportController {
     @PreAuthorize("hasAnyAuthority('REPORT_VIEW','REPORT_EXPORT')")
     public ResponseEntity<List<CampaignSummaryDto>> getCampaignSummaries(
             @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) UUID workspaceId,
             @RequestParam(required = false) Instant to) {
 
-        UUID wsId = WorkspaceContext.currentWorkspaceId();
+        UUID wsId = resolveWorkspace(workspaceId);
         return ResponseEntity.ok(reportService.getCampaignSummaries(wsId, from, to));
     }
 
     // ── inline DTOs ────────────────────────────────────────────────────────
+
+    private UUID resolveWorkspace(UUID overrideWsId) {
+        boolean isSuperAdmin = org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .getAuthentication().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"));
+        
+        if (isSuperAdmin && "00000000-0000-0000-0000-000000000000".equals(String.valueOf(overrideWsId))) {
+            return null; // Platform-level aggregation
+        }
+        if (isSuperAdmin && overrideWsId != null) {
+            return overrideWsId;
+        }
+        return WorkspaceContext.currentWorkspaceId();
+    }
 
     record ExportResponse(UUID exportId, String status) {}
 

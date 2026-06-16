@@ -47,6 +47,9 @@ public class AppUser {
     @Column(name = "failed_logins")
     private short failedLogins;
 
+    @Column(name = "last_login_at")
+    private Instant lastLoginAt;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

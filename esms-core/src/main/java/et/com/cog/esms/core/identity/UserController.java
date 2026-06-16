@@ -31,7 +31,7 @@ public class UserController {
 
     // ── GET /users ───────────────────────────────────────────────
     @GetMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_MEMBER_ADD')")
     public ResponseEntity<List<UserDto>> list(
             @RequestParam(required = false) String status) {
         List<AppUser> users = status != null
@@ -42,7 +42,7 @@ public class UserController {
 
     // ── GET /users/{id} ──────────────────────────────────────────
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_MEMBER_ADD')")
     public ResponseEntity<UserDto> get(@PathVariable UUID id) {
         return userRepo.findById(id)
                 .map(u -> ResponseEntity.ok(toDto(u)))
@@ -51,7 +51,7 @@ public class UserController {
 
     // ── POST /users ──────────────────────────────────────────────
     @PostMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_MEMBER_ADD')")
     public ResponseEntity<?> create(@Valid @RequestBody CreateUserRequest req) {
         if (userRepo.existsByUsername(req.getUsername())) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -72,7 +72,7 @@ public class UserController {
 
     // ── PATCH /users/{id} ────────────────────────────────────────
     @PatchMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_MEMBER_ADD')")
     public ResponseEntity<?> update(@PathVariable UUID id,
                                      @RequestBody Map<String, Object> updates) {
         return userRepo.findById(id)
@@ -89,7 +89,7 @@ public class UserController {
 
     // ── POST /users/{id}/deactivate ──────────────────────────────
     @PostMapping("/{id}/deactivate")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_MEMBER_ADD')")
     public ResponseEntity<?> deactivate(@PathVariable UUID id) {
         return userRepo.findById(id)
                 .map(u -> {
@@ -106,7 +106,7 @@ public class UserController {
 
     // ── POST /users/{id}/activate ────────────────────────────────
     @PostMapping("/{id}/activate")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_MEMBER_ADD')")
     public ResponseEntity<?> activate(@PathVariable UUID id) {
         return userRepo.findById(id)
                 .map(u -> {
@@ -123,11 +123,28 @@ public class UserController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    // ── GET /users/{id}/memberships ──────────────────────────────
+    @GetMapping("/{id}/memberships")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_MEMBER_ADD')")
+    public ResponseEntity<List<Map<String, Object>>> getMemberships(@PathVariable UUID id) {
+        var memberships = memberRepo.findByUserId(id);
+        var result = memberships.stream().map(m -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("workspaceId", m.getWorkspace().getId());
+            map.put("workspaceName", m.getWorkspace().getName());
+            map.put("division", m.getWorkspace().getDivision());
+            map.put("role", m.getRole().getCode());
+            map.put("assignedAt", m.getAssignedAt());
+            return map;
+        }).collect(Collectors.toList());
+        return ResponseEntity.ok(result);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────
 
     private UserDto toDto(AppUser u) {
         return new UserDto(u.getId(), u.getUsername(), u.getDisplayName(),
-                u.getEmail(), u.getStatus(), u.getCreatedAt(), u.getUpdatedAt());
+                u.getEmail(), u.getStatus(), u.getLastLoginAt(), u.getCreatedAt(), u.getUpdatedAt());
     }
 
     // ── DTOs ─────────────────────────────────────────────────────
@@ -139,6 +156,7 @@ public class UserController {
         private String displayName;
         private String email;
         private String status;
+        private Instant lastLoginAt;
         private Instant createdAt;
         private Instant updatedAt;
     }

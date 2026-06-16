@@ -35,9 +35,18 @@ public class Template {
     @Column(nullable = false)
     private String encoding;
 
-    /** DRAFT, APPROVED, RETIRED */
+    /** DRAFT, APPROVED, RETIRED, REJECTED */
     @Column(nullable = false)
     private String status;
+
+    @Column(name = "rejection_reason")
+    private String rejectionReason;
+
+    @Column(columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    private java.util.List<String> variables;
+
+    private String sender;
 
     @Column(name = "approved_by")
     private UUID approvedBy;

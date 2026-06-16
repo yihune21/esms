@@ -9,8 +9,9 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
-// import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
@@ -255,6 +256,96 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("message", "OTP resent", "expiresIn", 180));
     }
 
+    // ── GET /auth/me ─────────────────────────────────────────────
+
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> me() {
+        UUID userId = et.com.cog.esms.core.security.WorkspaceContext.currentUserId();
+        if (userId == null) {
+            return problem(401, "Not authenticated");
+        }
+
+        var userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            return problem(404, "User not found");
+        }
+        var user = userOpt.get();
+        var memberships = memberRepository.findByUserId(userId);
+
+        List<Map<String, Object>> workspaces = memberships.stream().map(m -> {
+            Map<String, Object> ws = new LinkedHashMap<>();
+            ws.put("id",       m.getWorkspace().getId());
+            ws.put("name",     m.getWorkspace().getName());
+            ws.put("code",     m.getWorkspace().getCode());
+            ws.put("division", m.getWorkspace().getDivision());
+            ws.put("role",     m.getRole().getCode());
+            ws.put("status",   m.getWorkspace().getStatus());
+            return ws;
+        }).toList();
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("id",          user.getId());
+        body.put("username",    user.getUsername());
+        body.put("displayName", user.getDisplayName());
+        body.put("email",       user.getEmail());
+        body.put("status",      user.getStatus());
+        body.put("lastLoginAt", user.getLastLoginAt());
+        body.put("workspaces",  workspaces);
+        body.put("currentWorkspaceId",
+                et.com.cog.esms.core.security.WorkspaceContext.currentWorkspaceId());
+
+        return ResponseEntity.ok(body);
+    }
+
+    // ── POST /auth/switch-workspace ──────────────────────────────
+
+    @PostMapping("/switch-workspace")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> switchWorkspace(
+            @Valid @RequestBody SwitchWorkspaceRequest req) {
+
+        UUID userId = et.com.cog.esms.core.security.WorkspaceContext.currentUserId();
+        if (userId == null) {
+            return problem(401, "Not authenticated");
+        }
+
+        var memberships = memberRepository.findByUserId(userId);
+
+        // Verify the user actually belongs to the target workspace
+        var targetMembership = memberships.stream()
+                .filter(m -> m.getWorkspace().getId().equals(req.getWorkspaceId()))
+                .findFirst();
+
+        if (targetMembership.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("title", "You are not a member of that workspace"));
+        }
+
+        var membership = targetMembership.get();
+        var workspace  = membership.getWorkspace();
+        if (!"ACTIVE".equals(workspace.getStatus())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("title", "Workspace is not active"));
+        }
+
+        var user = userRepository.findById(userId).orElseThrow();
+        List<String> perms = membership.getRole().getPermissionCodes();
+
+        String newAccessToken = tokenProvider.createAccessToken(
+                userId, user.getUsername(),
+                workspace.getId(), membership.getRole().getCode(), perms);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("accessToken",  newAccessToken);
+        body.put("expiresIn",    tokenProvider.getAccessTokenTtl().toSeconds());
+        body.put("workspaceId",  workspace.getId());
+        body.put("workspaceName",workspace.getName());
+        body.put("role",         membership.getRole().getCode());
+
+        return ResponseEntity.ok(body);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────
 
     private String extractRefreshCookie(HttpServletRequest request) {
@@ -300,5 +391,10 @@ public class AuthController {
     @Data
     public static class ResendOtpRequest {
         @NotBlank private String preAuthToken;
+    }
+
+    @Data
+    public static class SwitchWorkspaceRequest {
+        private UUID workspaceId;
     }
 }

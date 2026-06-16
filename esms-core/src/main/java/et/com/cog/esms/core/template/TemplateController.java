@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 public class TemplateController {
 
     private final TemplateRepository templateRepo;
+    private final et.com.cog.esms.core.identity.UserRepository userRepo;
 
     // ── GET /templates ───────────────────────────────────────────
     @GetMapping
@@ -55,6 +56,8 @@ public class TemplateController {
                 .name(req.getName())
                 .body(req.getBody())
                 .encoding(req.getEncoding() != null ? req.getEncoding() : "GSM7")
+                .variables(req.getVariables() != null ? req.getVariables() : List.of())
+                .sender(req.getSender())
                 .status("DRAFT")
                 .createdBy(WorkspaceContext.currentUserId())
                 .build();
@@ -85,6 +88,12 @@ public class TemplateController {
                     if (updates.containsKey("name"))     t.setName((String) updates.get("name"));
                     if (updates.containsKey("body"))     t.setBody((String) updates.get("body"));
                     if (updates.containsKey("encoding")) t.setEncoding((String) updates.get("encoding"));
+                    if (updates.containsKey("sender"))   t.setSender((String) updates.get("sender"));
+                    if (updates.containsKey("variables")) {
+                        @SuppressWarnings("unchecked")
+                        List<String> vars = (List<String>) updates.get("variables");
+                        t.setVariables(vars);
+                    }
                     return ResponseEntity.ok(toDto(templateRepo.save(t)));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -113,6 +122,23 @@ public class TemplateController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    // ── POST /templates/{id}/reject ──────────────────────────────
+    @PostMapping("/{id}/reject")
+    @PreAuthorize("hasAuthority('TEMPLATE_APPROVE')")
+    public ResponseEntity<?> reject(@PathVariable UUID id, @RequestBody Map<String, String> payload) {
+        return templateRepo.findById(id)
+                .map(t -> {
+                    if (!"DRAFT".equals(t.getStatus())) {
+                        return ResponseEntity.status(HttpStatus.CONFLICT)
+                                .body(Map.of("title", "Only DRAFT templates can be rejected"));
+                    }
+                    t.setStatus("REJECTED");
+                    t.setRejectionReason(payload.get("rejectionReason"));
+                    return ResponseEntity.ok(toDto(templateRepo.save(t)));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     // ── POST /templates/{id}/retire ──────────────────────────────
     @PostMapping("/{id}/retire")
     @PreAuthorize("hasAuthority('TEMPLATE_APPROVE')")
@@ -129,12 +155,35 @@ public class TemplateController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    // ── POST /templates/{id}/reactivate ──────────────────────────
+    @PostMapping("/{id}/reactivate")
+    @PreAuthorize("hasAuthority('TEMPLATE_APPROVE') or hasAuthority('TEMPLATE_CREATE')")
+    public ResponseEntity<?> reactivate(@PathVariable UUID id) {
+        return templateRepo.findById(id)
+                .map(t -> {
+                    if (!"RETIRED".equals(t.getStatus()) && !"REJECTED".equals(t.getStatus())) {
+                        return ResponseEntity.status(HttpStatus.CONFLICT)
+                                .body(Map.of("title", "Only RETIRED or REJECTED templates can be reactivated"));
+                    }
+                    t.setStatus("DRAFT");
+                    t.setRejectionReason(null);
+                    return ResponseEntity.ok(toDto(templateRepo.save(t)));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     // ── Helpers ──────────────────────────────────────────────────
 
     private TemplateDto toDto(Template t) {
+        String creatorName = userRepo.findById(t.getCreatedBy())
+                .map(et.com.cog.esms.core.identity.AppUser::getDisplayName).orElse(null);
+        String approverName = t.getApprovedBy() != null ? userRepo.findById(t.getApprovedBy())
+                .map(et.com.cog.esms.core.identity.AppUser::getDisplayName).orElse(null) : null;
+
         return new TemplateDto(t.getId(), t.getWorkspaceId(), t.getName(), t.getBody(),
-                t.getEncoding(), t.getStatus(), t.getApprovedBy(), t.getApprovedAt(),
-                t.getCreatedBy(), t.getCreatedAt());
+                t.getEncoding(), t.getStatus(), t.getRejectionReason(), t.getVariables(), t.getSender(),
+                t.getApprovedBy(), approverName, t.getApprovedAt(),
+                t.getCreatedBy(), creatorName, t.getCreatedAt());
     }
 
     // ── DTOs ─────────────────────────────────────────────────────
@@ -147,9 +196,14 @@ public class TemplateController {
         private String body;
         private String encoding;
         private String status;
+        private String rejectionReason;
+        private List<String> variables;
+        private String sender;
         private UUID approvedBy;
+        private String approverName;
         private Instant approvedAt;
         private UUID createdBy;
+        private String creatorName;
         private Instant createdAt;
     }
 
@@ -159,5 +213,7 @@ public class TemplateController {
         @NotBlank private String body;
         /** GSM7 (default) or UCS2 */
         private String encoding;
+        private List<String> variables;
+        private String sender;
     }
 }

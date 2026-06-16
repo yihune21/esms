@@ -12,14 +12,14 @@ import java.util.UUID;
 @Repository
 public interface ScheduleRepository extends JpaRepository<Schedule, UUID> {
 
-    List<Schedule> findByWorkspaceIdOrderByDueDateAsc(UUID workspaceId);
+    List<Schedule> findByWorkspaceIdOrderByCreatedAtDesc(UUID workspaceId);
 
-    List<Schedule> findByWorkspaceIdAndStatusOrderByDueDateAsc(UUID workspaceId, String status);
+    List<Schedule> findByWorkspaceIdAndStatusOrderByCreatedAtDesc(UUID workspaceId, String status);
 
     /**
-     * Fetches all PENDING schedules whose due date has arrived or passed.
-     * Used by the @Scheduled polling job to fire reminders.
+     * Fetches all ACTIVE schedules.
+     * Used by the @Scheduled polling job to process active reminders.
      */
-    @Query("SELECT s FROM Schedule s WHERE s.status = 'PENDING' AND s.dueDate <= :today")
-    List<Schedule> findPendingDueBy(@Param("today") LocalDate today);
+    @Query("SELECT s FROM Schedule s WHERE s.status = 'ACTIVE'")
+    List<Schedule> findActiveSchedules();
 }

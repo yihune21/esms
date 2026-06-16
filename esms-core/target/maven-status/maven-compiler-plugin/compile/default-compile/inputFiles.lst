@@ -1,4 +1,13 @@
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/EsmsCoreApplication.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/admin/CarrierPrefix.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/admin/CarrierPrefixController.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/admin/CarrierPrefixRepository.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/admin/SystemSetting.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/admin/SystemSettingController.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/admin/SystemSettingRepository.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/audit/AuditLog.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/audit/AuditLogController.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/audit/AuditLogRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/campaign/Approval.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/campaign/ApprovalRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/campaign/Campaign.java
@@ -58,6 +67,7 @@
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/template/TemplateRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/workspace/Permission.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/workspace/Role.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/workspace/RoleController.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/workspace/RoleRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/workspace/Workspace.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/workspace/WorkspaceController.java

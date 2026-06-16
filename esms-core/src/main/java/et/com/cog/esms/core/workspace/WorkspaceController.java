@@ -135,6 +135,31 @@ public class WorkspaceController {
                         }
                     }
 
+                    if (updates.containsKey("adminUserId")) {
+                        String adminIdStr = (String) updates.get("adminUserId");
+                        if (adminIdStr != null) {
+                            UUID adminId = UUID.fromString(adminIdStr);
+                            roleRepo.findByCode("DEPT_HEAD").ifPresent(role -> {
+                                userRepo.findById(adminId).ifPresent(user -> {
+                                    memberRepo.findByWorkspaceIdAndUserId(id, adminId)
+                                            .ifPresentOrElse(
+                                                    member -> {
+                                                        member.setRole(role);
+                                                        memberRepo.save(member);
+                                                    },
+                                                    () -> memberRepo.save(et.com.cog.esms.core.identity.WorkspaceMember.builder()
+                                                            .workspace(ws)
+                                                            .user(user)
+                                                            .role(role)
+                                                            .assignedAt(java.time.Instant.now())
+                                                            .assignedBy(WorkspaceContext.currentUserId())
+                                                            .build())
+                                            );
+                                });
+                            });
+                        }
+                    }
+
                     List<String> currentPerms = permissionRepo.findByWorkspaceId(id)
                             .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
                     return ResponseEntity.ok(toDto(ws, currentPerms));
@@ -216,6 +241,18 @@ public class WorkspaceController {
         memberRepo.save(member);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(Map.of("message", "Member added"));
+    }
+
+    // ── DELETE /workspaces/{id}/members/{userId} ─────────────────
+    @DeleteMapping("/{id}/members/{userId}")
+    @PreAuthorize("hasAuthority('WORKSPACE_MEMBER_REMOVE')")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<?> removeMember(@PathVariable UUID id, @PathVariable UUID userId) {
+        if (!memberRepo.existsByWorkspaceIdAndUserId(id, userId)) {
+            return ResponseEntity.notFound().build();
+        }
+        memberRepo.deleteByWorkspaceIdAndUserId(id, userId);
+        return ResponseEntity.noContent().build();
     }
 
     // ── Helpers ──────────────────────────────────────────────────

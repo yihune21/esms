@@ -38,21 +38,26 @@ public class ScheduleService {
     // ── CRUD ──────────────────────────────────────────────────────────────────
 
     /**
-     * Create a new reminder schedule.
+     * Create a new reminder schedule rule.
      */
     @Transactional
-    public Schedule create(UUID workspaceId, UUID policyId, String kind,
-                           LocalDate dueDate, UUID templateId) {
+    public Schedule create(UUID workspaceId, String name, UUID recipientGroupId,
+                           UUID uploadId, UUID templateId, String customBody, String kind, boolean sendNow) {
         Schedule s = Schedule.builder()
                 .workspaceId(workspaceId)
-                .policyId(policyId)
-                .kind(kind)
-                .dueDate(dueDate)
+                .name(name)
+                .recipientGroupId(recipientGroupId)
+                .uploadId(uploadId)
                 .templateId(templateId)
-                .status("PENDING")
+                .customBody(customBody)
+                .kind(kind != null ? kind : "CUSTOM")
+                .status(sendNow ? "ACTIVE" : "INACTIVE")
                 .build();
         Schedule saved = scheduleRepo.save(s);
-        log.info("Schedule created: id={}, kind={}, dueDate={}", saved.getId(), kind, dueDate);
+        log.info("Schedule created: id={}, name={}", saved.getId(), name);
+        if (sendNow) {
+            fireSchedule(saved);
+        }
         return saved;
     }
 
@@ -62,9 +67,9 @@ public class ScheduleService {
     @Transactional(readOnly = true)
     public List<Schedule> list(UUID workspaceId, String status) {
         if (status != null && !status.isBlank()) {
-            return scheduleRepo.findByWorkspaceIdAndStatusOrderByDueDateAsc(workspaceId, status);
+            return scheduleRepo.findByWorkspaceIdAndStatusOrderByCreatedAtDesc(workspaceId, status);
         }
-        return scheduleRepo.findByWorkspaceIdOrderByDueDateAsc(workspaceId);
+        return scheduleRepo.findByWorkspaceIdOrderByCreatedAtDesc(workspaceId);
     }
 
     /**
@@ -81,37 +86,50 @@ public class ScheduleService {
     }
 
     /**
-     * Cancel a PENDING schedule.
+     * Deactivate a schedule.
      */
     @Transactional
-    public Schedule cancel(UUID workspaceId, UUID scheduleId) {
+    public Schedule deactivate(UUID workspaceId, UUID scheduleId) {
         Schedule s = getById(workspaceId, scheduleId);
-        if (!"PENDING".equals(s.getStatus())) {
-            throw new IllegalStateException(
-                    "Only PENDING schedules can be cancelled. Current status: " + s.getStatus());
-        }
-        s.setStatus("CANCELLED");
-        s.setCancelledAt(Instant.now());
-        log.info("Schedule cancelled: id={}", scheduleId);
+        s.setStatus("INACTIVE");
+        log.info("Schedule deactivated: id={}", scheduleId);
         return scheduleRepo.save(s);
+    }
+
+    /**
+     * Activate a schedule.
+     */
+    @Transactional
+    public Schedule activate(UUID workspaceId, UUID scheduleId) {
+        Schedule s = getById(workspaceId, scheduleId);
+        s.setStatus("ACTIVE");
+        log.info("Schedule activated: id={}", scheduleId);
+        return scheduleRepo.save(s);
+    }
+
+    /**
+     * Trigger a schedule manually.
+     */
+    @Transactional
+    public void trigger(UUID workspaceId, UUID scheduleId) {
+        Schedule s = getById(workspaceId, scheduleId);
+        fireSchedule(s);
     }
 
     // ── Scheduled polling job ─────────────────────────────────────────────────
 
     /**
-     * Runs every 60 seconds. Finds all PENDING schedules whose due date has
-     * arrived or passed, marks them FIRED, and publishes an OutboxEvent per
-     * schedule so esms-sender picks them up via the existing relay loop.
+     * Runs every 60 seconds. Finds all ACTIVE schedules and publishes an OutboxEvent
+     * per schedule so esms-sender can check rules and fire necessary SMS.
      */
     @Scheduled(fixedDelayString = "${esms.scheduler.reminder-poll-ms:60000}")
     @Transactional
     public void processDueSchedules() {
-        LocalDate today = LocalDate.now();
-        List<Schedule> due = scheduleRepo.findPendingDueBy(today);
-        if (due.isEmpty()) return;
+        List<Schedule> active = scheduleRepo.findActiveSchedules();
+        if (active.isEmpty()) return;
 
-        log.info("Reminder scheduler: found {} due schedule(s) for {}", due.size(), today);
-        for (Schedule s : due) {
+        log.info("Reminder scheduler: processing {} active schedules", active.size());
+        for (Schedule s : active) {
             try {
                 fireSchedule(s);
             } catch (Exception ex) {
@@ -125,13 +143,14 @@ public class ScheduleService {
     private void fireSchedule(Schedule s) {
         // Build a minimal payload for esms-sender to resolve recipient list
         // and template, then dispatch the SMS.
-        Map<String, Object> payload = Map.of(
-                "scheduleId",  s.getId().toString(),
-                "workspaceId", s.getWorkspaceId().toString(),
-                "policyId",    s.getPolicyId().toString(),
-                "templateId",  s.getTemplateId().toString(),
-                "kind",        s.getKind()
-        );
+        Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("scheduleId", s.getId().toString());
+        payload.put("workspaceId", s.getWorkspaceId().toString());
+        if (s.getTemplateId() != null) payload.put("templateId", s.getTemplateId().toString());
+        if (s.getCustomBody() != null) payload.put("customBody", s.getCustomBody());
+        if (s.getRecipientGroupId() != null) payload.put("recipientGroupId", s.getRecipientGroupId().toString());
+        if (s.getUploadId() != null) payload.put("uploadId", s.getUploadId().toString());
+        payload.put("kind", s.getKind());
 
         String payloadJson;
         try {
@@ -148,11 +167,6 @@ public class ScheduleService {
                 .build();
         outboxRepo.save(event);
 
-        s.setStatus("FIRED");
-        s.setFiredAt(Instant.now());
-        scheduleRepo.save(s);
-
-        log.info("Schedule fired: id={}, policyId={}, templateId={}",
-                s.getId(), s.getPolicyId(), s.getTemplateId());
+        log.info("Schedule event generated: id={}", s.getId());
     }
 }

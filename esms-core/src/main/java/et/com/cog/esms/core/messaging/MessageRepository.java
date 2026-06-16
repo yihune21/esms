@@ -40,7 +40,8 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
 
     // ── Reporting queries ─────────────────────────────────────────────────
 
-    long countByWorkspaceIdAndStatus(UUID workspaceId, String status);
+    @Query("SELECT COUNT(m) FROM Message m WHERE (:wsId IS NULL OR m.workspaceId = :wsId) AND m.status = :status")
+    long countByWorkspaceIdAndStatus(@Param("wsId") UUID workspaceId, @Param("status") String status);
 
     /**
      * Flexible filtered query for the delivery dashboard.
@@ -53,7 +54,7 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
      */
     @Query("""
         SELECT m FROM Message m
-        WHERE m.workspaceId = :wsId
+        WHERE (:wsId IS NULL OR m.workspaceId = :wsId)
           AND (:from       IS NULL OR m.createdAt  >= :from)
           AND (:to         IS NULL OR m.createdAt  <= :to)
           AND (:campaignId IS NULL OR m.campaignId  = :campaignId)
@@ -75,7 +76,7 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
 
     @Query("""
         SELECT COUNT(m) FROM Message m
-        WHERE m.workspaceId = :wsId
+        WHERE (:wsId IS NULL OR m.workspaceId = :wsId)
           AND (:from       IS NULL OR m.createdAt  >= :from)
           AND (:to         IS NULL OR m.createdAt  <= :to)
           AND (:campaignId IS NULL OR m.campaignId  = :campaignId)
@@ -106,7 +107,7 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
                m.status                  AS status,
                COUNT(*)                  AS total
         FROM message m
-        WHERE m.workspace_id = :wsId
+        WHERE (CAST(:wsId AS uuid) IS NULL OR m.workspace_id = CAST(:wsId AS uuid))
           AND (:from IS NULL OR m.created_at >= :from)
           AND (:to   IS NULL OR m.created_at <= :to)
         GROUP BY CAST(m.created_at AS date), m.status
@@ -130,7 +131,7 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
                COUNT(*) FILTER (WHERE m.status = 'FAILED')              AS failed,
                COUNT(*) FILTER (WHERE m.status IN ('PENDING','QUEUED')) AS pending
         FROM message m
-        WHERE m.workspace_id = :wsId
+        WHERE (CAST(:wsId AS uuid) IS NULL OR m.workspace_id = CAST(:wsId AS uuid))
           AND m.campaign_id IS NOT NULL
           AND (:from IS NULL OR m.created_at >= :from)
           AND (:to   IS NULL OR m.created_at <= :to)
