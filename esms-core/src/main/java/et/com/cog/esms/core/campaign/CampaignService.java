@@ -1,10 +1,15 @@
 package et.com.cog.esms.core.campaign;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import et.com.cog.esms.core.messaging.OutboxEvent;
+import et.com.cog.esms.core.messaging.OutboxEventRepository;
 import et.com.cog.esms.core.security.WorkspaceContext;
 import et.com.cog.esms.core.workspace.Workspace;
 import et.com.cog.esms.core.workspace.WorkspaceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +29,8 @@ public class CampaignService {
     private final CampaignRepository campaignRepo;
     private final ApprovalRepository approvalRepo;
     private final WorkspaceRepository workspaceRepo;
+    private final OutboxEventRepository outboxRepo;
+    private final ObjectMapper objectMapper;
 
     /** Allowed transitions per workspace kind — mirrors the DB trigger. */
     private static final Map<String, Set<String>> TRANSITIONS = Map.ofEntries(
@@ -181,6 +188,54 @@ public class CampaignService {
         c.setCompletedAt(Instant.now());
         log.info("Campaign cancelled: id={}, by={}", campaignId, WorkspaceContext.currentUserId());
         return campaignRepo.save(c);
+    }
+
+    // ── Scheduled campaign poller ─────────────────────────────────
+
+    /**
+     * Runs every minute. Finds all APPROVED campaigns of kind=SCHEDULED whose
+     * {@code scheduled_at} timestamp has passed, transitions them to QUEUED,
+     * and publishes an OutboxEvent so esms-sender dispatches the messages.
+     *
+     * This is the "send an SMS at a specific future date" feature.
+     * It is completely separate from Reminders (date-triggered, expiry-based sends).
+     */
+    @Scheduled(fixedDelayString = "${esms.scheduler.campaign-poll-ms:60000}")
+    @Transactional
+    public void processDueScheduledCampaigns() {
+        List<Campaign> due = campaignRepo.findDueScheduledCampaigns(Instant.now());
+        if (due.isEmpty()) return;
+
+        log.info("Scheduled campaign poller: {} campaign(s) are due", due.size());
+        for (Campaign c : due) {
+            try {
+                Map<String, Object> payload = new HashMap<>();
+                payload.put("campaignId",  c.getId().toString());
+                payload.put("workspaceId", c.getWorkspaceId().toString());
+                if (c.getTemplateId()        != null) payload.put("templateId",      c.getTemplateId().toString());
+                if (c.getCustomBody()        != null) payload.put("customBody",       c.getCustomBody());
+                if (c.getRecipientGroupId()  != null) payload.put("recipientGroupId", c.getRecipientGroupId().toString());
+                if (c.getUploadId()          != null) payload.put("uploadId",         c.getUploadId().toString());
+                payload.put("kind", c.getKind());
+
+                String json = objectMapper.writeValueAsString(payload);
+                OutboxEvent event = OutboxEvent.builder()
+                        .aggregateType("campaign")
+                        .aggregateId(c.getId())
+                        .eventType("ScheduledFire")
+                        .payload(json)
+                        .build();
+                outboxRepo.save(event);
+
+                c.setStatus("QUEUED");
+                campaignRepo.save(c);
+                log.info("Scheduled campaign queued: id={}", c.getId());
+            } catch (JsonProcessingException e) {
+                log.error("Failed to serialize payload for campaign id={}: {}", c.getId(), e.getMessage(), e);
+            } catch (Exception ex) {
+                log.error("Failed to process scheduled campaign id={}: {}", c.getId(), ex.getMessage(), ex);
+            }
+        }
     }
 
     // ── Internal ─────────────────────────────────────────────────

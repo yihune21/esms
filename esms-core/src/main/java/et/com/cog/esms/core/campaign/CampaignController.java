@@ -133,9 +133,9 @@ public class CampaignController {
     @Data
     public static class UpdateCampaignRequest {
         private String  name;
-        /** INSTANT | SCHEDULED | REMINDER */
-        @Pattern(regexp = "INSTANT|SCHEDULED|REMINDER",
-                 message = "kind must be one of: INSTANT, SCHEDULED, REMINDER")
+        /** INSTANT | SCHEDULED */
+        @Pattern(regexp = "INSTANT|SCHEDULED",
+                 message = "kind must be one of: INSTANT, SCHEDULED")
         private String  kind;
         private UUID    templateId;
         private UUID    recipientGroupId;
@@ -147,10 +147,10 @@ public class CampaignController {
     @Data
     public static class CreateCampaignRequest {
         @NotBlank private String name;
-        /** INSTANT | SCHEDULED | REMINDER */
+        /** INSTANT | SCHEDULED */
         @NotBlank
-        @Pattern(regexp = "INSTANT|SCHEDULED|REMINDER",
-                 message = "kind must be one of: INSTANT, SCHEDULED, REMINDER")
+        @Pattern(regexp = "INSTANT|SCHEDULED",
+                 message = "kind must be one of: INSTANT, SCHEDULED")
         private String kind;
         private UUID templateId;
         private UUID recipientGroupId;
@@ -168,7 +168,7 @@ public class CampaignController {
     public static class CampaignDto {
         private UUID    id;
         private String  name;
-        /** INSTANT | SCHEDULED | REMINDER */
+        /** INSTANT | SCHEDULED */
         private String  kind;
         private String  status;
         private UUID    templateId;
