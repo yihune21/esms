@@ -76,7 +76,7 @@ public class ContactController {
 
     // ── PATCH /contacts/{id} ─────────────────────────────────────
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAuthority('CONTACT_CREATE')")
+    @PreAuthorize("hasAuthority('CONTACT_UPDATE')")
     public ResponseEntity<?> update(@PathVariable UUID id,
                                     @RequestBody Map<String, Object> updates) {
         return contactRepo.findById(id)
@@ -96,7 +96,7 @@ public class ContactController {
 
     // ── POST /contacts/{id}/deactivate ───────────────────────────
     @PostMapping("/{id}/deactivate")
-    @PreAuthorize("hasAuthority('CONTACT_CREATE')")
+    @PreAuthorize("hasAuthority('CONTACT_DELETE')")
     @Transactional
     public ResponseEntity<ContactDto> deactivate(@PathVariable UUID id) {
         return contactRepo.findById(id).map(c -> {
@@ -107,7 +107,7 @@ public class ContactController {
 
     // ── POST /contacts/{id}/activate ─────────────────────────────
     @PostMapping("/{id}/activate")
-    @PreAuthorize("hasAuthority('CONTACT_CREATE')")
+    @PreAuthorize("hasAuthority('CONTACT_UPDATE')")
     @Transactional
     public ResponseEntity<ContactDto> activate(@PathVariable UUID id) {
         return contactRepo.findById(id).map(c -> {

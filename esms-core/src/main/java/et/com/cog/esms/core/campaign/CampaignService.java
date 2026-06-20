@@ -7,6 +7,7 @@ import et.com.cog.esms.core.messaging.OutboxEventRepository;
 import et.com.cog.esms.core.security.WorkspaceContext;
 import et.com.cog.esms.core.workspace.Workspace;
 import et.com.cog.esms.core.workspace.WorkspaceRepository;
+import et.com.cog.esms.core.workspace.WorkspacePermissionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -31,6 +32,7 @@ public class CampaignService {
     private final WorkspaceRepository workspaceRepo;
     private final OutboxEventRepository outboxRepo;
     private final ObjectMapper objectMapper;
+    private final WorkspacePermissionRepository permissionRepo;
 
     /** Allowed transitions per workspace kind — mirrors the DB trigger. */
     private static final Map<String, Set<String>> TRANSITIONS = Map.ofEntries(
@@ -87,8 +89,10 @@ public class CampaignService {
         Workspace ws = workspaceRepo.findById(c.getWorkspaceId())
                 .orElseThrow(() -> new IllegalStateException("Workspace not found"));
 
-        String targetState = "FINANCE".equals(ws.getKind()) ? "PENDING_HEAD" : "PENDING_APPROVAL";
-        validateTransition(ws.getKind(), c.getStatus(), targetState);
+        boolean hasDelegation = permissionRepo.existsByWorkspaceIdAndPermissionCode(ws.getId(), "DELEGATION");
+
+        String targetState = ("FINANCE".equals(ws.getKind()) || hasDelegation) ? "PENDING_HEAD" : "PENDING_APPROVAL";
+        validateTransition(ws.getKind(), c.getStatus(), targetState, hasDelegation);
 
         recordApproval(c, c.getStatus(), targetState, null);
         c.setStatus(targetState);
@@ -103,6 +107,7 @@ public class CampaignService {
         Workspace ws = workspaceRepo.findById(c.getWorkspaceId())
                 .orElseThrow(() -> new IllegalStateException("Workspace not found"));
 
+        boolean hasDelegation = permissionRepo.existsByWorkspaceIdAndPermissionCode(ws.getId(), "DELEGATION");
         UUID actorId = WorkspaceContext.currentUserId();
 
         // Approver ≠ Drafter
@@ -113,7 +118,7 @@ public class CampaignService {
         // Determine target state
         String targetState;
         if ("PENDING_HEAD".equals(c.getStatus())) {
-            targetState = "PENDING_CEO";
+            targetState = ("FINANCE".equals(ws.getKind()) || hasDelegation) ? "PENDING_CEO" : "APPROVED";
         } else if ("PENDING_CEO".equals(c.getStatus())) {
             targetState = "APPROVED";
         } else if ("PENDING_APPROVAL".equals(c.getStatus())) {
@@ -122,10 +127,39 @@ public class CampaignService {
             throw new IllegalStateException("Campaign is not in an approvable state: " + c.getStatus());
         }
 
-        validateTransition(ws.getKind(), c.getStatus(), targetState);
+        validateTransition(ws.getKind(), c.getStatus(), targetState, hasDelegation);
         recordApproval(c, c.getStatus(), targetState, note);
         c.setStatus(targetState);
-        return campaignRepo.save(c);
+        Campaign saved = campaignRepo.save(c);
+
+        if ("APPROVED".equals(targetState) && "INSTANT".equals(saved.getKind())) {
+            try {
+                Map<String, Object> payload = new HashMap<>();
+                payload.put("campaignId",  saved.getId().toString());
+                payload.put("workspaceId", saved.getWorkspaceId().toString());
+                if (saved.getTemplateId()        != null) payload.put("templateId",      saved.getTemplateId().toString());
+                if (saved.getCustomBody()        != null) payload.put("customBody",       saved.getCustomBody());
+                if (saved.getRecipientGroupId()  != null) payload.put("recipientGroupId", saved.getRecipientGroupId().toString());
+                if (saved.getUploadId()          != null) payload.put("uploadId",         saved.getUploadId().toString());
+                payload.put("kind", saved.getKind());
+
+                String json = objectMapper.writeValueAsString(payload);
+                OutboxEvent event = OutboxEvent.builder()
+                        .aggregateType("campaign")
+                        .aggregateId(saved.getId())
+                        .eventType("ScheduledFire")
+                        .payload(json)
+                        .build();
+                outboxRepo.save(event);
+
+                saved.setStatus("QUEUED");
+                saved = campaignRepo.save(saved);
+                log.info("Instant campaign queued immediately: id={}", saved.getId());
+            } catch (JsonProcessingException e) {
+                log.error("Failed to serialize payload for instant campaign id={}: {}", saved.getId(), e.getMessage(), e);
+            }
+        }
+        return saved;
     }
 
     @Transactional
@@ -136,7 +170,9 @@ public class CampaignService {
         Workspace ws = workspaceRepo.findById(c.getWorkspaceId())
                 .orElseThrow(() -> new IllegalStateException("Workspace not found"));
 
-        validateTransition(ws.getKind(), c.getStatus(), "DRAFT");
+        boolean hasDelegation = permissionRepo.existsByWorkspaceIdAndPermissionCode(ws.getId(), "DELEGATION");
+
+        validateTransition(ws.getKind(), c.getStatus(), "DRAFT", hasDelegation);
         recordApproval(c, c.getStatus(), "DRAFT", note);
         c.setStatus("DRAFT");
         return campaignRepo.save(c);
@@ -182,7 +218,9 @@ public class CampaignService {
         Workspace ws = workspaceRepo.findById(c.getWorkspaceId())
                 .orElseThrow(() -> new IllegalStateException("Workspace not found"));
 
-        validateTransition(ws.getKind(), c.getStatus(), "CANCELLED");
+        boolean hasDelegation = permissionRepo.existsByWorkspaceIdAndPermissionCode(ws.getId(), "DELEGATION");
+
+        validateTransition(ws.getKind(), c.getStatus(), "CANCELLED", hasDelegation);
         recordApproval(c, c.getStatus(), "CANCELLED", note);
         c.setStatus("CANCELLED");
         c.setCompletedAt(Instant.now());
@@ -240,13 +278,13 @@ public class CampaignService {
 
     // ── Internal ─────────────────────────────────────────────────
 
-    private void validateTransition(String wsKind, String fromState, String toState) {
-        String key = wsKind + ":" + fromState;
+    private void validateTransition(String wsKind, String fromState, String toState, boolean hasDelegation) {
+        String key = (hasDelegation ? "FINANCE" : wsKind) + ":" + fromState;
         Set<String> allowed = TRANSITIONS.get(key);
         if (allowed == null || !allowed.contains(toState)) {
             throw new IllegalStateException(
-                    String.format("Illegal transition %s → %s for workspace kind %s",
-                            fromState, toState, wsKind));
+                    String.format("Illegal transition %s → %s for workspace kind %s (delegation=%b)",
+                            fromState, toState, wsKind, hasDelegation));
         }
     }
 

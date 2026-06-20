@@ -81,7 +81,7 @@ public class ContactGroupController {
 
     // ── PATCH /groups/{id} ───────────────────────────────────────
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAuthority('CONTACT_CREATE')")
+    @PreAuthorize("hasAuthority('CONTACT_UPDATE')")
     public ResponseEntity<?> update(@PathVariable UUID id,
                                     @RequestBody Map<String, Object> updates) {
         return groupRepo.findById(id)
@@ -95,7 +95,7 @@ public class ContactGroupController {
 
     // ── POST /groups/{id}/deactivate ─────────────────────────────
     @PostMapping("/{id}/deactivate")
-    @PreAuthorize("hasAuthority('CONTACT_CREATE')")
+    @PreAuthorize("hasAuthority('CONTACT_DELETE')")
     @Transactional
     public ResponseEntity<GroupDto> deactivate(@PathVariable UUID id) {
         return groupRepo.findById(id).map(g -> {
@@ -106,7 +106,7 @@ public class ContactGroupController {
 
     // ── POST /groups/{id}/activate ───────────────────────────────
     @PostMapping("/{id}/activate")
-    @PreAuthorize("hasAuthority('CONTACT_CREATE')")
+    @PreAuthorize("hasAuthority('CONTACT_UPDATE')")
     @Transactional
     public ResponseEntity<GroupDto> activate(@PathVariable UUID id) {
         return groupRepo.findById(id).map(g -> {
@@ -144,7 +144,7 @@ public class ContactGroupController {
 
     // ── POST /groups/{id}/members ────────────────────────────────
     @PostMapping("/{id}/members")
-    @PreAuthorize("hasAuthority('CONTACT_CREATE')")
+    @PreAuthorize("hasAuthority('CONTACT_UPDATE')")
     public ResponseEntity<?> addMember(@PathVariable UUID id,
                                        @Valid @RequestBody AddMemberRequest req) {
         if (!groupRepo.existsById(id)) {
@@ -169,7 +169,7 @@ public class ContactGroupController {
 
     // ── DELETE /groups/{id}/members/{contactId} ──────────────────
     @DeleteMapping("/{id}/members/{contactId}")
-    @PreAuthorize("hasAuthority('CONTACT_CREATE')")
+    @PreAuthorize("hasAuthority('CONTACT_UPDATE')")
     @Transactional
     public ResponseEntity<Void> removeMember(@PathVariable UUID id,
                                              @PathVariable UUID contactId) {

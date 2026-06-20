@@ -29,6 +29,16 @@
       "key": "exportId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "reminderId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "delegateUserId",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -446,7 +456,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"code\": \"WS-01\",\n    \"name\": \"Marketing Dept\",\n    \"kind\": \"GENERIC\",\n    \"division\": \"HQ\",\n    \"adminUserId\": \"{{user_id}}\",\n    \"permissions\": [\n        \"WORKSPACE_VIEW\",\n        \"CONTACT_VIEW\"\n    ]\n}"
+              "raw": "{\n    \"code\": \"WS-01\",\n    \"name\": \"Marketing Dept\",\n    \"kind\": \"GENERIC\",\n    \"division\": \"HQ\",\n    \"adminUserId\": \"{{user_id}}\",\n    \"delegateUserId\": \"{{delegateUserId}}\",\n    \"permissions\": [\n        \"WORKSPACE_VIEW\",\n        \"CONTACT_VIEW\",\n        \"DELEGATION\"\n    ]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/workspaces",
@@ -503,7 +513,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"name\": \"Marketing Dept Updated\",\n    \"senderMask\": \"MKTG\",\n    \"dailySmsLimit\": 5000,\n    \"division\": \"New HQ\",\n    \"permissions\": [\n        \"WORKSPACE_VIEW\",\n        \"CONTACT_VIEW\",\n        \"TEMPLATE_VIEW\"\n    ]\n}"
+              "raw": "{\n    \"name\": \"Marketing Dept Updated\",\n    \"senderMask\": \"MKTG\",\n    \"dailySmsLimit\": 5000,\n    \"division\": \"New HQ\",\n    \"delegateUserId\": \"{{delegateUserId}}\",\n    \"permissions\": [\n        \"WORKSPACE_VIEW\",\n        \"CONTACT_VIEW\",\n        \"TEMPLATE_VIEW\",\n        \"DELEGATION\"\n    ]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/workspaces/:id",
@@ -1720,10 +1730,10 @@
       ]
     },
     {
-      "name": "Schedules",
+      "name": "Reminders",
       "item": [
         {
-          "name": "GET /schedules",
+          "name": "GET /reminders",
           "request": {
             "method": "GET",
             "header": [
@@ -1734,12 +1744,12 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/schedules",
+              "raw": "{{baseUrl}}/reminders",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "schedules"
+                "reminders"
               ],
               "query": [
                 {
@@ -1749,12 +1759,12 @@
                 }
               ]
             },
-            "description": "List all schedule rules for the workspace. Filter by status=ACTIVE|INACTIVE."
+            "description": "List all reminder rules for the workspace. Filter by status=ACTIVE|INACTIVE."
           },
           "response": []
         },
         {
-          "name": "POST /schedules",
+          "name": "POST /reminders",
           "request": {
             "method": "POST",
             "header": [
@@ -1765,18 +1775,18 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/schedules",
+              "raw": "{{baseUrl}}/reminders",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "schedules"
+                "reminders"
               ]
             },
-            "description": "Create a new schedule rule. sendNow=true triggers it immediately.",
+            "description": "Create a new reminder rule.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"30-Day Policy Renewal Reminder\",\n  \"recipientGroupId\": \"{{groupId}}\",\n  \"uploadId\": null,\n  \"templateId\": \"{{templateId}}\",\n  \"customBody\": null,\n  \"kind\": \"T_MINUS_30\",\n  \"sendNow\": false\n}",
+              "raw": "{\n  \"name\": \"15-Day Policy Expiry Reminder\",\n  \"recipientGroupId\": \"{{groupId}}\",\n  \"uploadId\": \"{{uploadId}}\",\n  \"templateId\": \"{{templateId}}\",\n  \"customBody\": null,\n  \"triggerDays\": 15,\n  \"kind\": \"CUSTOM\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1787,7 +1797,7 @@
           "response": []
         },
         {
-          "name": "GET /schedules/{id}",
+          "name": "GET /reminders/{id}",
           "request": {
             "method": "GET",
             "header": [
@@ -1798,21 +1808,21 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/schedules/{{scheduleId}}",
+              "raw": "{{baseUrl}}/reminders/{{reminderId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "schedules",
-                "{{scheduleId}}"
+                "reminders",
+                "{{reminderId}}"
               ]
             },
-            "description": "Get a single schedule rule by ID."
+            "description": "Get a single reminder rule by ID."
           },
           "response": []
         },
         {
-          "name": "POST /schedules/{id}/activate",
+          "name": "POST /reminders/{id}/activate",
           "request": {
             "method": "POST",
             "header": [
@@ -1823,22 +1833,22 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/schedules/{{scheduleId}}/activate",
+              "raw": "{{baseUrl}}/reminders/{{reminderId}}/activate",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "schedules",
-                "{{scheduleId}}",
+                "reminders",
+                "{{reminderId}}",
                 "activate"
               ]
             },
-            "description": "Activate a schedule rule (status \u2192 ACTIVE). The poller will start processing it."
+            "description": "Activate a reminder rule (status \u2192 ACTIVE). The poller will start processing it."
           },
           "response": []
         },
         {
-          "name": "POST /schedules/{id}/deactivate",
+          "name": "POST /reminders/{id}/deactivate",
           "request": {
             "method": "POST",
             "header": [
@@ -1849,22 +1859,22 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/schedules/{{scheduleId}}/deactivate",
+              "raw": "{{baseUrl}}/reminders/{{reminderId}}/deactivate",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "schedules",
-                "{{scheduleId}}",
+                "reminders",
+                "{{reminderId}}",
                 "deactivate"
               ]
             },
-            "description": "Deactivate a schedule rule (status \u2192 INACTIVE)."
+            "description": "Deactivate a reminder rule (status \u2192 INACTIVE)."
           },
           "response": []
         },
         {
-          "name": "POST /schedules/{id}/trigger",
+          "name": "POST /reminders/{id}/trigger",
           "request": {
             "method": "POST",
             "header": [
@@ -1875,17 +1885,17 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/schedules/{{scheduleId}}/trigger",
+              "raw": "{{baseUrl}}/reminders/{{reminderId}}/trigger",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "schedules",
-                "{{scheduleId}}",
+                "reminders",
+                "{{reminderId}}",
                 "trigger"
               ]
             },
-            "description": "Manually trigger a schedule rule once (fires an OutboxEvent immediately)."
+            "description": "Manually trigger a reminder rule once (fires an OutboxEvent immediately based on expiry condition)."
           },
           "response": []
         }

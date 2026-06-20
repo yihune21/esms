@@ -31,6 +31,7 @@ public class WorkspaceController {
 
     // ── GET /workspaces ──────────────────────────────────────────
     @GetMapping
+    @PreAuthorize("hasAuthority('WORKSPACE_VIEW')")
     public ResponseEntity<List<WorkspaceDto>> list() {
         String roleCode = WorkspaceContext.current() != null
                 ? WorkspaceContext.current().getRoleCode() : null;
@@ -97,12 +98,31 @@ public class WorkspaceController {
             });
         }
 
+        // Assign Delegate (CEO/Director) if the workspace has DELEGATION permission and delegateUserId is provided
+        boolean hasDelegation = req.getPermissions() != null && req.getPermissions().contains("DELEGATION");
+        if (hasDelegation && req.getDelegateUserId() != null) {
+            roleRepo.findByCode("CEO").ifPresentOrElse(
+                ceoRole -> userRepo.findById(req.getDelegateUserId()).ifPresent(user ->
+                    memberRepo.save(et.com.cog.esms.core.identity.WorkspaceMember.builder()
+                            .workspace(savedWs)
+                            .user(user)
+                            .role(ceoRole)
+                            .assignedAt(java.time.Instant.now())
+                            .assignedBy(WorkspaceContext.currentUserId())
+                            .build())),
+                // Fallback: if no CEO role exists, store with DEPT_HEAD and flag via log
+                () -> log.warn("CEO role not found — delegate {} not assigned for workspace {}",
+                        req.getDelegateUserId(), savedWs.getId())
+            );
+        }
+
         List<String> savedPerms = req.getPermissions() != null ? req.getPermissions() : List.of();
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(savedWs, savedPerms));
     }
 
     // ── GET /workspaces/{id} ─────────────────────────────────────
     @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('WORKSPACE_VIEW')")
     public ResponseEntity<WorkspaceDto> get(@PathVariable UUID id) {
         return workspaceRepo.findById(id)
                 .map(ws -> {
@@ -160,6 +180,34 @@ public class WorkspaceController {
                         }
                     }
 
+                    // Update delegate (CEO/Director) when DELEGATION permission is present
+                    List<String> currentPermsForCheck = permissionRepo.findByWorkspaceId(id)
+                            .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
+                    boolean hasDelegation = currentPermsForCheck.contains("DELEGATION")
+                            || (updates.containsKey("permissions") &&
+                               ((List<?>) updates.get("permissions")).contains("DELEGATION"));
+
+                    if (updates.containsKey("delegateUserId") && hasDelegation) {
+                        String delegateIdStr = (String) updates.get("delegateUserId");
+                        if (delegateIdStr != null) {
+                            UUID delegateId = UUID.fromString(delegateIdStr);
+                            roleRepo.findByCode("CEO").ifPresent(ceoRole ->
+                                userRepo.findById(delegateId).ifPresent(user ->
+                                    memberRepo.findByWorkspaceIdAndUserId(id, delegateId)
+                                            .ifPresentOrElse(
+                                                    member -> { member.setRole(ceoRole); memberRepo.save(member); },
+                                                    () -> memberRepo.save(
+                                                            et.com.cog.esms.core.identity.WorkspaceMember.builder()
+                                                                    .workspace(ws)
+                                                                    .user(user)
+                                                                    .role(ceoRole)
+                                                                    .assignedAt(java.time.Instant.now())
+                                                                    .assignedBy(WorkspaceContext.currentUserId())
+                                                                    .build()))
+                            ));
+                        }
+                    }
+
                     List<String> currentPerms = permissionRepo.findByWorkspaceId(id)
                             .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
                     return ResponseEntity.ok(toDto(ws, currentPerms));
@@ -197,6 +245,7 @@ public class WorkspaceController {
 
     // ── GET /workspaces/{id}/members ─────────────────────────────
     @GetMapping("/{id}/members")
+    @PreAuthorize("hasAuthority('WORKSPACE_VIEW')")
     public ResponseEntity<List<Map<String, Object>>> members(@PathVariable UUID id) {
         var members = memberRepo.findByWorkspaceId(id);
         var result = members.stream().map(m -> {
@@ -294,7 +343,7 @@ public class WorkspaceController {
         return toDtoEnriched(ws, permissions);
     }
 
-    /** Enriched DTO with memberCount + admin name (no N+1 — uses one count query + one member lookup). */
+    /** Enriched DTO with memberCount + admin name + delegate name (no N+1). */
     private WorkspaceDto toDtoEnriched(Workspace ws, List<String> permissions) {
         long memberCount = memberRepo.findByWorkspaceId(ws.getId()).size();
 
@@ -310,9 +359,22 @@ public class WorkspaceController {
                 .map(m -> m.getUser().getId())
                 .orElse(null);
 
+        // Find the CEO delegate of this workspace
+        String delegateName = memberRepo.findByWorkspaceId(ws.getId()).stream()
+                .filter(m -> "CEO".equals(m.getRole().getCode()))
+                .findFirst()
+                .map(m -> m.getUser().getDisplayName())
+                .orElse(null);
+        UUID delegateUserId = memberRepo.findByWorkspaceId(ws.getId()).stream()
+                .filter(m -> "CEO".equals(m.getRole().getCode()))
+                .findFirst()
+                .map(m -> m.getUser().getId())
+                .orElse(null);
+
         return new WorkspaceDto(ws.getId(), ws.getCode(), ws.getName(),
                 ws.getKind(), ws.getDivision(), ws.getStatus(), ws.getSenderMask(),
-                ws.getDailySmsLimit(), permissions, (int) memberCount, adminName, adminUserId);
+                ws.getDailySmsLimit(), permissions, (int) memberCount, adminName, adminUserId,
+                delegateName, delegateUserId);
     }
 
     // ── DTOs ─────────────────────────────────────────────────────
@@ -332,6 +394,8 @@ public class WorkspaceController {
         private int          memberCount;
         private String       adminName;
         private UUID         adminUserId;
+        private String       delegateName;
+        private UUID         delegateUserId;
     }
 
     @Data
@@ -340,7 +404,14 @@ public class WorkspaceController {
         @NotBlank private String name;
         private String kind;
         private String division;
+        /** Admin (Department Head) of this workspace. */
         private UUID adminUserId;
+        /**
+         * Delegate user (CEO / Director) — required when the workspace permissions
+         * include DELEGATION (i.e. messages need CEO/Director sign-off).
+         * Ignored if DELEGATION is not in the permissions list.
+         */
+        private UUID delegateUserId;
         private List<String> permissions;
     }
 

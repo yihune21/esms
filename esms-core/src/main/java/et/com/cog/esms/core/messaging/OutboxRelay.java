@@ -26,7 +26,7 @@ public class OutboxRelay {
 
     private final OutboxEventRepository outboxRepo;
     private final RabbitTemplate rabbitTemplate;
-    // private final ObjectMapper objectMapper;
+    private final et.com.cog.esms.core.campaign.CampaignDispatchService campaignDispatchService;
 
     /**
      * Poll every 2 seconds for unpublished outbox events.
@@ -37,19 +37,23 @@ public class OutboxRelay {
         List<OutboxEvent> events = outboxRepo.findUnpublished();
         if (events.isEmpty()) return;
 
-        log.debug("Relaying {} outbox events to RabbitMQ", events.size());
+        log.debug("Relaying {} outbox events", events.size());
 
         for (OutboxEvent event : events) {
             try {
-                rabbitTemplate.convertAndSend(
-                        QueueConstants.EXCHANGE_SMS,
-                        "sms.send",
-                        event.getPayload()
-                );
+                if ("ScheduledFire".equals(event.getEventType()) || "ReminderFire".equals(event.getEventType())) {
+                    campaignDispatchService.dispatch(event);
+                } else {
+                    rabbitTemplate.convertAndSend(
+                            QueueConstants.EXCHANGE_SMS,
+                            "sms.send",
+                            event.getPayload()
+                    );
+                }
                 event.setPublishedAt(Instant.now());
                 outboxRepo.save(event);
             } catch (Exception e) {
-                log.error("Failed to publish outbox event {}: {}", event.getId(), e.getMessage());
+                log.error("Failed to publish/process outbox event {}: {}", event.getId(), e.getMessage());
                 // Will be retried on next poll
                 break;
             }

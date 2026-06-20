@@ -12,4 +12,6 @@ public interface WorkspacePermissionRepository extends JpaRepository<WorkspacePe
     List<WorkspacePermission> findByWorkspaceId(UUID workspaceId);
 
     void deleteByWorkspaceId(UUID workspaceId);
+
+    boolean existsByWorkspaceIdAndPermissionCode(UUID workspaceId, String permissionCode);
 }

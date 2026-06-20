@@ -12,6 +12,7 @@
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/campaign/ApprovalRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/campaign/Campaign.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/campaign/CampaignController.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/campaign/CampaignDispatchService.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/campaign/CampaignRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/campaign/CampaignService.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/config/OpenApiConfig.java
@@ -50,6 +51,10 @@
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/messaging/OutboxRelay.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/messaging/RabbitMqConfig.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/messaging/StatusEventConsumer.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/reminder/Reminder.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/reminder/ReminderController.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/reminder/ReminderRepository.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/reminder/ReminderService.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/reporting/DeliveryReport.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/reporting/ReportController.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/reporting/ReportExport.java
@@ -58,10 +63,6 @@
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/reporting/ReportExportRequest.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/reporting/ReportExportWorker.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/reporting/ReportService.java
-/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/schedule/Schedule.java
-/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/schedule/ScheduleController.java
-/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/schedule/ScheduleRepository.java
-/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/schedule/ScheduleService.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/security/GlobalExceptionHandler.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/security/JwtAuthenticationFilter.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/security/JwtTokenProvider.java
@@ -69,6 +70,8 @@
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/security/WorkspaceContext.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/template/Template.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/template/TemplateController.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/template/TemplateRecipient.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/template/TemplateRecipientRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/template/TemplateRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/workspace/Permission.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/workspace/Role.java
