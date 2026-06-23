@@ -53,6 +53,9 @@ public class ReminderService {
     public Reminder create(UUID workspaceId, String name, UUID recipientGroupId,
                            UUID uploadId, UUID templateId, String customBody,
                            String kind, int triggerDays) {
+        if (templateId == null && (customBody == null || customBody.isBlank())) {
+            throw new IllegalArgumentException("Either templateId or customBody must be provided");
+        }
         Reminder r = Reminder.builder()
                 .workspaceId(workspaceId)
                 .name(name)
@@ -66,6 +69,67 @@ public class ReminderService {
                 .build();
         Reminder saved = reminderRepo.save(r);
         log.info("Reminder created: id={}, name={}, triggerDays={}", saved.getId(), name, triggerDays);
+        return saved;
+    }
+
+    /**
+     * Update an existing reminder rule.
+     */
+    @Transactional
+    public Reminder update(UUID workspaceId, UUID reminderId, Map<String, Object> updates) {
+        Reminder r = getById(workspaceId, reminderId);
+
+        if (updates.containsKey("name")) {
+            r.setName((String) updates.get("name"));
+        }
+        if (updates.containsKey("recipientGroupId")) {
+            Object val = updates.get("recipientGroupId");
+            if (val == null) {
+                r.setRecipientGroupId(null);
+            } else {
+                r.setRecipientGroupId(UUID.fromString(val.toString()));
+            }
+        }
+        if (updates.containsKey("uploadId")) {
+            Object val = updates.get("uploadId");
+            if (val == null) {
+                r.setUploadId(null);
+            } else {
+                r.setUploadId(UUID.fromString(val.toString()));
+            }
+        }
+        if (updates.containsKey("templateId")) {
+            Object val = updates.get("templateId");
+            if (val == null) {
+                r.setTemplateId(null);
+            } else {
+                r.setTemplateId(UUID.fromString(val.toString()));
+            }
+        }
+        if (updates.containsKey("customBody")) {
+            r.setCustomBody((String) updates.get("customBody"));
+        }
+        if (updates.containsKey("triggerDays")) {
+            Object val = updates.get("triggerDays");
+            if (val instanceof Number) {
+                r.setTriggerDays(((Number) val).intValue());
+            } else if (val instanceof String) {
+                r.setTriggerDays(Integer.parseInt((String) val));
+            }
+        }
+        if (updates.containsKey("kind")) {
+            r.setKind((String) updates.get("kind"));
+        }
+        if (updates.containsKey("status")) {
+            r.setStatus((String) updates.get("status"));
+        }
+
+        if (r.getTemplateId() == null && (r.getCustomBody() == null || r.getCustomBody().isBlank())) {
+            throw new IllegalArgumentException("Either templateId or customBody must be provided");
+        }
+
+        Reminder saved = reminderRepo.save(r);
+        log.info("Reminder updated: id={}, name={}", saved.getId(), saved.getName());
         return saved;
     }
 

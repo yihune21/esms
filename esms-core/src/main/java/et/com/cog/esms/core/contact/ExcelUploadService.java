@@ -97,6 +97,8 @@ public class ExcelUploadService {
             int duplicateCount = 0;
             int errorCount = 0;
             List<Map<String, Object>> errors = new ArrayList<>();
+            // Track phones already seen in this upload batch (Fix 1B: in-batch dedup)
+            Set<String> seenPhonesInBatch = new LinkedHashSet<>();
 
             for (int rowIdx = 1; rowIdx <= sheet.getLastRowNum(); rowIdx++) {
                 Row row = sheet.getRow(rowIdx);
@@ -113,11 +115,12 @@ public class ExcelUploadService {
                         continue;
                     }
 
-                    // Check for duplicates within the workspace
-                    if (contactRepo.existsByWorkspaceIdAndPhoneE164(workspaceId, phone)) {
+                    // Check for duplicates: first within this batch, then in the DB
+                    if (seenPhonesInBatch.contains(phone)
+                            || contactRepo.existsByWorkspaceIdAndPhoneE164(workspaceId, phone)) {
                         duplicateCount++;
-                        // Still add to group if exists
-                        if (groupId != null) {
+                        // Still add to group if the contact already exists in the DB
+                        if (groupId != null && !seenPhonesInBatch.contains(phone)) {
                             contactRepo.findByWorkspaceIdAndPhoneE164(workspaceId, phone)
                                     .ifPresent(existing -> {
                                         if (!memberRepo.existsByGroupIdAndContactId(groupId, existing.getId())) {
@@ -130,6 +133,7 @@ public class ExcelUploadService {
                         }
                         continue;
                     }
+                    seenPhonesInBatch.add(phone);
 
                     // Build extra fields map
                     Map<String, String> extra = new LinkedHashMap<>();

@@ -64,9 +64,31 @@ public class CampaignController {
     }
 
     @PostMapping("/{id}/approve")
-    @PreAuthorize("hasAuthority('CAMPAIGN_APPROVE')")
+    @PreAuthorize("hasAnyAuthority('CAMPAIGN_APPROVE', 'CAMPAIGN_APPROVE_CEO')")
     public ResponseEntity<CampaignDto> approve(@PathVariable UUID id,
                                                 @RequestBody(required = false) NoteRequest note) {
+        // Fix 5: gate CEO-tier approval on the CAMPAIGN_APPROVE_CEO permission
+        Campaign campaign = campaignRepo.findById(id).orElse(null);
+        if (campaign == null) {
+            return ResponseEntity.notFound().build();
+        }
+        boolean isCeoStage = "PENDING_CEO".equals(campaign.getStatus());
+        boolean hasCeoPermission = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("CAMPAIGN_APPROVE_CEO"));
+        boolean hasHeadPermission = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("CAMPAIGN_APPROVE"));
+
+        if (isCeoStage && !hasCeoPermission) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(null);
+        }
+        if (!isCeoStage && !hasHeadPermission) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(null);
+        }
+
         String n = note != null ? note.getNote() : null;
         return ResponseEntity.ok(toDto(campaignService.approve(id, n)));
     }

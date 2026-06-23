@@ -33,7 +33,7 @@ public class Delegation {
     @Column(name = "starts_at", nullable = false)
     private Instant startsAt;
 
-    @Column(name = "ends_at", nullable = false)
+    @Column(name = "ends_at")
     private Instant endsAt;
 
     @Column(length = 255)

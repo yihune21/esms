@@ -72,7 +72,7 @@ public class Reminder {
     private String kind;
 
     /** Template to use for the reminder SMS. */
-    @Column(name = "template_id", nullable = false)
+    @Column(name = "template_id")
     private UUID templateId;
 
     /**

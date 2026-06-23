@@ -192,6 +192,12 @@ public class ContactGroupController {
         UUID wsId   = WorkspaceContext.currentWorkspaceId();
         UUID userId = WorkspaceContext.currentUserId();
 
+        // Fix 1A: reject early for SUPER_ADMIN with no active workspace context
+        if (wsId == null || userId == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("title", "No workspace context — select a workspace before uploading contacts"));
+        }
+
         ContactUpload upload = excelUploadService.parseAndImport(wsId, userId, file, id);
 
         if ("FAILED".equals(upload.getStatus())) {
@@ -223,6 +229,12 @@ public class ContactGroupController {
     public ResponseEntity<?> standaloneUpload(@RequestParam("file") MultipartFile file) {
         UUID wsId   = WorkspaceContext.currentWorkspaceId();
         UUID userId = WorkspaceContext.currentUserId();
+
+        // Fix 1A: reject early for SUPER_ADMIN with no active workspace context
+        if (wsId == null || userId == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("title", "No workspace context — select a workspace before uploading contacts"));
+        }
 
         // groupId = null → contacts created but not attached to any named group
         ContactUpload upload = excelUploadService.parseAndImport(wsId, userId, file, null);

@@ -1,5 +1,8 @@
 package et.com.cog.esms.core.security;
 
+import et.com.cog.esms.core.identity.Delegation;
+import et.com.cog.esms.core.identity.DelegationRepository;
+import et.com.cog.esms.core.workspace.RoleRepository;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -16,6 +19,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -28,18 +33,23 @@ import java.util.stream.Collectors;
  * 3. Checks that the JTI is not in the Redis denylist (logout).
  * 4. Checks idle timeout: if lastActivity > 5 min, rejects with 440.
  * 5. Populates SecurityContext + WorkspaceContext.
+ * 6. [Option B] Injects extra authorities from any active Delegation records
+ *    for this user in the current workspace — no re-login required.
+ *    The injected authorities are in-memory only; the JWT is never modified.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private final JwtTokenProvider tokenProvider;
-    private final StringRedisTemplate redisTemplate;
+    private final JwtTokenProvider      tokenProvider;
+    private final StringRedisTemplate   redisTemplate;
+    private final DelegationRepository  delegationRepo;
+    private final RoleRepository        roleRepo;
 
-    private static final String BEARER_PREFIX = "Bearer ";
+    private static final String BEARER_PREFIX  = "Bearer ";
     private static final String DENYLIST_PREFIX = "jwt:deny:";
-    private static final String IDLE_PREFIX = "session:idle:";
+    private static final String IDLE_PREFIX     = "session:idle:";
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -52,7 +62,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        String token = header.substring(BEARER_PREFIX.length());
+        String token  = header.substring(BEARER_PREFIX.length());
         Claims claims = tokenProvider.parseToken(token);
 
         if (claims == null) {
@@ -77,21 +87,63 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         // Check idle timeout
-        UUID userId = tokenProvider.getUserId(claims);
+        UUID userId  = tokenProvider.getUserId(claims);
         String idleKey = IDLE_PREFIX + userId;
         String lastActivity = redisTemplate.opsForValue().get(idleKey);
         if (lastActivity != null) {
             // Touch the idle timer — reset to 5 min
             redisTemplate.expire(idleKey, Duration.ofMinutes(5));
         }
-        // If the key doesn't exist, the session may have expired from idle
-        // (but it could also be a fresh login — SessionService creates the key)
 
-        // Populate Spring Security context
-        List<String> permissions = tokenProvider.getPermissions(claims);
+        // ── Base authorities from the JWT ─────────────────────────
+        List<String> jwtPermissions = tokenProvider.getPermissions(claims);
         String roleCode = tokenProvider.getRoleCode(claims);
+        UUID workspaceId = tokenProvider.getWorkspaceId(claims);
 
-        List<SimpleGrantedAuthority> authorities = permissions.stream()
+        List<String> effectivePermissions = new ArrayList<>(jwtPermissions);
+
+        // ── Option B: per-request delegation injection ────────────
+        //
+        // Query the delegation table to find any active (non-revoked, within
+        // time window) delegation where this user is the toUserId.
+        // If found, look up the CEO role's permissions and add them to this
+        // request's authority list without touching the JWT.
+        //
+        // This means:
+        //   - No re-login needed when a delegation starts or is revoked.
+        //   - The next request automatically reflects the current delegation state.
+        //   - The injected authorities exist only in memory for this request's
+        //     SecurityContext thread — they are never written back to the token.
+        boolean isDelegating = false;
+        try {
+            List<Delegation> activeDelegations = workspaceId != null
+                    ? delegationRepo.findActiveForDelegate(userId, workspaceId, Instant.now())
+                    : delegationRepo.findActiveForDelegateAnyWorkspace(userId, Instant.now());
+
+            if (!activeDelegations.isEmpty()) {
+                isDelegating = true;
+                log.debug("User {} has {} active delegation(s) — injecting CEO authorities",
+                        userId, activeDelegations.size());
+
+                // Fetch the CEO role's permission codes and merge them in,
+                // avoiding duplicates that are already in the JWT.
+                roleRepo.findByCode("CEO").ifPresent(ceoRole -> {
+                    List<String> ceoCodes = ceoRole.getPermissionCodes();
+                    for (String code : ceoCodes) {
+                        if (!effectivePermissions.contains(code)) {
+                            effectivePermissions.add(code);
+                        }
+                    }
+                });
+            }
+        } catch (Exception ex) {
+            // Never let a delegation lookup failure block the request.
+            // Log it and continue with the base JWT authorities.
+            log.warn("Delegation authority injection failed for userId={}: {}", userId, ex.getMessage());
+        }
+
+        // ── Build Spring Security authorities ─────────────────────
+        List<SimpleGrantedAuthority> authorities = effectivePermissions.stream()
                 .map(SimpleGrantedAuthority::new)
                 .collect(Collectors.toList());
 
@@ -104,9 +156,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         auth.setDetails(claims);
         SecurityContextHolder.getContext().setAuthentication(auth);
 
-        // Populate WorkspaceContext (layer 1 of tenant isolation)
-        UUID workspaceId = tokenProvider.getWorkspaceId(claims);
-        WorkspaceContext.set(workspaceId, userId, roleCode, permissions);
+        // ── Populate WorkspaceContext ──────────────────────────────
+        WorkspaceContext.set(workspaceId, userId, roleCode, effectivePermissions, isDelegating);
 
         try {
             filterChain.doFilter(request, response);

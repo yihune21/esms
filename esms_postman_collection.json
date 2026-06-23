@@ -1783,16 +1783,55 @@
                 "reminders"
               ]
             },
-            "description": "Create a new reminder rule.",
+            "description": "Create a new reminder rule. Either templateId or customBody must be provided.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"15-Day Policy Expiry Reminder\",\n  \"recipientGroupId\": \"{{groupId}}\",\n  \"uploadId\": \"{{uploadId}}\",\n  \"templateId\": \"{{templateId}}\",\n  \"customBody\": null,\n  \"triggerDays\": 15,\n  \"kind\": \"CUSTOM\"\n}",
+              "raw": "{\n  \"name\": \"15-Day Policy Expiry Reminder\",\n  \"recipientGroupId\": \"{{groupId}}\",\n  \"uploadId\": \"{{uploadId}}\",\n  \"templateId\": null,\n  \"customBody\": \"Hello ${name}, your policy expires in ${triggerDays} days!\",\n  \"triggerDays\": 15,\n  \"kind\": \"CUSTOM\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             }
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /reminders/{id}",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"15-Day Policy Expiry Reminder (Updated)\",\n  \"customBody\": \"Hello ${name}, policy expires in ${triggerDays} days!\",\n  \"templateId\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reminders/{{reminderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reminders",
+                "{{reminderId}}"
+              ]
+            },
+            "description": "Partially update a reminder rule."
           },
           "response": []
         },
@@ -2576,7 +2615,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"toUserId\": \"<delegatee_user_uuid>\",\n  \"startsAt\": \"2026-06-16T10:00:00Z\",\n  \"endsAt\": \"2026-06-20T10:00:00Z\",\n  \"reason\": \"Vacation coverage\"\n}",
+              "raw": "{\n  \"toUserId\": \"<delegatee_user_uuid>\",\n  \"workspaceId\": \"<optional_workspace_uuid_for_superadmin>\",\n  \"startsAt\": \"2026-06-16T10:00:00Z\",\n  \"endsAt\": null,\n  \"reason\": \"Standing delegation (no expiry)\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2592,7 +2631,39 @@
                 "delegations"
               ]
             },
-            "description": "Create a new role/permission delegation. Requires ADMIN_DELEGATE authority."
+            "description": "Create a new role/permission delegation. Requires ADMIN_DELEGATE authority. workspaceId and endsAt are optional."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /delegations/mine",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/delegations/mine?activeOnly=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "delegations",
+                "mine"
+              ],
+              "query": [
+                {
+                  "key": "activeOnly",
+                  "value": "true",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "List all active delegations where the calling user is the delegatee/recipient."
           },
           "response": []
         },

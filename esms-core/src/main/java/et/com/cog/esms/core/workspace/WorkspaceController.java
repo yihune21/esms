@@ -159,18 +159,29 @@ public class WorkspaceController {
                         String adminIdStr = (String) updates.get("adminUserId");
                         if (adminIdStr != null) {
                             UUID adminId = UUID.fromString(adminIdStr);
-                            roleRepo.findByCode("DEPT_HEAD").ifPresent(role -> {
+                            roleRepo.findByCode("DEPT_HEAD").ifPresent(deptHeadRole -> {
+                                // Fix 2: demote all current DEPT_HEAD members before promoting the new one
+                                memberRepo.findByWorkspaceId(id).stream()
+                                        .filter(m -> "DEPT_HEAD".equals(m.getRole().getCode())
+                                                && !m.getUser().getId().equals(adminId))
+                                        .forEach(m -> {
+                                            roleRepo.findByCode("OPERATOR").ifPresent(opRole -> {
+                                                m.setRole(opRole);
+                                                memberRepo.save(m);
+                                            });
+                                        });
+                                // Promote new admin
                                 userRepo.findById(adminId).ifPresent(user -> {
                                     memberRepo.findByWorkspaceIdAndUserId(id, adminId)
                                             .ifPresentOrElse(
                                                     member -> {
-                                                        member.setRole(role);
+                                                        member.setRole(deptHeadRole);
                                                         memberRepo.save(member);
                                                     },
                                                     () -> memberRepo.save(et.com.cog.esms.core.identity.WorkspaceMember.builder()
                                                             .workspace(ws)
                                                             .user(user)
-                                                            .role(role)
+                                                            .role(deptHeadRole)
                                                             .assignedAt(java.time.Instant.now())
                                                             .assignedBy(WorkspaceContext.currentUserId())
                                                             .build())
@@ -180,18 +191,32 @@ public class WorkspaceController {
                         }
                     }
 
-                    // Update delegate (CEO/Director) when DELEGATION permission is present
+                    // Update delegate (CEO/Director)
+                    // Fix 4: handle both setting and clearing the delegate
+                    boolean delegationKeyPresent = updates.containsKey("delegateUserId");
                     List<String> currentPermsForCheck = permissionRepo.findByWorkspaceId(id)
                             .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
-                    boolean hasDelegation = currentPermsForCheck.contains("DELEGATION")
-                            || (updates.containsKey("permissions") &&
-                               ((List<?>) updates.get("permissions")).contains("DELEGATION"));
+                    boolean delegationFeatureActive = currentPermsForCheck.contains("DELEGATION")
+                            || (updates.containsKey("permissions")
+                                && ((List<?>) updates.get("permissions")).contains("DELEGATION"));
 
-                    if (updates.containsKey("delegateUserId") && hasDelegation) {
+                    if (delegationKeyPresent) {
                         String delegateIdStr = (String) updates.get("delegateUserId");
-                        if (delegateIdStr != null) {
+
+                        if (delegateIdStr == null || delegateIdStr.isBlank() || !delegationFeatureActive) {
+                            // Clear: remove all existing CEO members for this workspace
+                            memberRepo.findByWorkspaceId(id).stream()
+                                    .filter(m -> "CEO".equals(m.getRole().getCode()))
+                                    .forEach(memberRepo::delete);
+                        } else {
                             UUID delegateId = UUID.fromString(delegateIdStr);
-                            roleRepo.findByCode("CEO").ifPresent(ceoRole ->
+                            roleRepo.findByCode("CEO").ifPresent(ceoRole -> {
+                                // Fix 4: demote previous CEO member before assigning new one
+                                memberRepo.findByWorkspaceId(id).stream()
+                                        .filter(m -> "CEO".equals(m.getRole().getCode())
+                                                && !m.getUser().getId().equals(delegateId))
+                                        .forEach(memberRepo::delete);
+
                                 userRepo.findById(delegateId).ifPresent(user ->
                                     memberRepo.findByWorkspaceIdAndUserId(id, delegateId)
                                             .ifPresentOrElse(
@@ -204,8 +229,14 @@ public class WorkspaceController {
                                                                     .assignedAt(java.time.Instant.now())
                                                                     .assignedBy(WorkspaceContext.currentUserId())
                                                                     .build()))
-                            ));
+                                );
+                            });
                         }
+                    } else if (!delegationFeatureActive) {
+                        // DELEGATION permission was removed — purge any CEO members
+                        memberRepo.findByWorkspaceId(id).stream()
+                                .filter(m -> "CEO".equals(m.getRole().getCode()))
+                                .forEach(memberRepo::delete);
                     }
 
                     List<String> currentPerms = permissionRepo.findByWorkspaceId(id)

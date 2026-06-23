@@ -78,6 +78,15 @@ public class ReminderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(r));
     }
 
+    @PatchMapping("/{id}")
+    @PreAuthorize("hasAuthority('SCHEDULE_MANAGE')")
+    public ResponseEntity<ReminderDto> update(@PathVariable UUID id,
+                                               @RequestBody java.util.Map<String, Object> updates) {
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
+        Reminder r = reminderService.update(wsId, id, updates);
+        return ResponseEntity.ok(toDto(r));
+    }
+
     // ── List ──────────────────────────────────────────────────────────────────
 
     @GetMapping
@@ -160,7 +169,6 @@ public class ReminderController {
         /** ID of the Excel upload containing policy holders + expiry dates. */
         private UUID uploadId;
 
-        @NotNull
         private UUID templateId;
 
         private String customBody;

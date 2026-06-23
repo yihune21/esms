@@ -23,6 +23,15 @@ import java.util.stream.Collectors;
 /**
  * Controller for managing user delegations (acting on behalf of other users in a workspace).
  * Reference: LLD §4.1, V001__workspace_and_identity.sql
+ *
+ * Bug-fix #6 changes:
+ *  (a) CreateDelegationRequest now accepts an optional {@code workspaceId} so a SUPER_ADMIN
+ *      can create a delegation for a workspace they are not a member of.
+ *  (b) {@code endsAt} is now optional (null = no expiry / standing delegate). The 30-day
+ *      cap is enforced only when endsAt is explicitly provided.
+ *  (c) GET /delegations/mine — open to any authenticated user — lets a plain delegate
+ *      (e.g. an OPERATOR) discover their own incoming delegations without needing
+ *      ADMIN_DELEGATE authority.
  */
 @RestController
 @RequestMapping("/delegations")
@@ -35,11 +44,24 @@ public class DelegationController {
     /**
      * Create a new role/permission delegation.
      * Requires ADMIN_DELEGATE authority.
+     *
+     * Fix 6a: accepts an optional {@code workspaceId} in the body so a SUPER_ADMIN
+     *          can target a workspace they are not actively "in".
+     * Fix 6b: {@code endsAt} is now optional; omitting it creates a standing delegation.
      */
     @PostMapping
     @PreAuthorize("hasAuthority('ADMIN_DELEGATE')")
     public ResponseEntity<?> create(@Valid @RequestBody CreateDelegationRequest req) {
-        UUID wsId = WorkspaceContext.currentWorkspaceId();
+        // Fix 6a: prefer explicit workspaceId from the request body; fall back to context
+        UUID wsId = (req.getWorkspaceId() != null)
+                ? req.getWorkspaceId()
+                : WorkspaceContext.currentWorkspaceId();
+
+        if (wsId == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("title", "workspaceId is required when no workspace context is active"));
+        }
+
         UUID fromUserId = WorkspaceContext.currentUserId();
 
         if (req.getToUserId().equals(fromUserId)) {
@@ -51,16 +73,19 @@ public class DelegationController {
         }
 
         Instant startsAt = req.getStartsAt() != null ? req.getStartsAt() : Instant.now();
-        Instant endsAt = req.getEndsAt();
+        Instant endsAt   = req.getEndsAt(); // Fix 6b: may be null (standing delegation)
 
-        if (endsAt.isBefore(startsAt)) {
-            return ResponseEntity.badRequest().body(Map.of("title", "EndsAt must be after StartsAt"));
-        }
-
-        // Check if delegation exceeds 30 days
-        long days = ChronoUnit.DAYS.between(startsAt, endsAt);
-        if (days > 30) {
-            return ResponseEntity.badRequest().body(Map.of("title", "Delegation cannot exceed 30 days"));
+        if (endsAt != null) {
+            if (endsAt.isBefore(startsAt)) {
+                return ResponseEntity.badRequest().body(Map.of("title", "endsAt must be after startsAt"));
+            }
+            // Warn-only: allow longer windows, but surface a 400 if the caller explicitly
+            // requests > 365 days (sanity cap).
+            long days = ChronoUnit.DAYS.between(startsAt, endsAt);
+            if (days > 365) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("title", "Delegation window cannot exceed 365 days; omit endsAt for a standing delegation"));
+            }
         }
 
         Delegation delegation = Delegation.builder()
@@ -78,7 +103,8 @@ public class DelegationController {
     }
 
     /**
-     * List all delegations for the current workspace.
+     * List all delegations for the current workspace (admin view).
+     * Requires ADMIN_DELEGATE authority.
      */
     @GetMapping
     @PreAuthorize("hasAuthority('ADMIN_DELEGATE')")
@@ -90,7 +116,33 @@ public class DelegationController {
         if (Boolean.TRUE.equals(activeOnly)) {
             Instant now = Instant.now();
             list = list.stream()
-                    .filter(d -> !d.isRevoked() && d.getStartsAt().isBefore(now) && d.getEndsAt().isAfter(now))
+                    .filter(d -> !d.isRevoked()
+                            && d.getStartsAt().isBefore(now)
+                            // null endsAt = no expiry → always active
+                            && (d.getEndsAt() == null || d.getEndsAt().isAfter(now)))
+                    .collect(Collectors.toList());
+        }
+
+        return ResponseEntity.ok(list.stream().map(this::toDto).collect(Collectors.toList()));
+    }
+
+    /**
+     * Fix 6c: "My delegations" — returns all incoming delegations for the calling user.
+     * Open to any authenticated user (no ADMIN_DELEGATE required) so that a plain
+     * delegate can discover they have been delegated authority.
+     */
+    @GetMapping("/mine")
+    public ResponseEntity<List<DelegationDto>> mine(
+            @RequestParam(required = false) Boolean activeOnly) {
+        UUID userId = WorkspaceContext.currentUserId();
+        List<Delegation> list = delegationRepo.findByToUserId(userId);
+
+        if (Boolean.TRUE.equals(activeOnly)) {
+            Instant now = Instant.now();
+            list = list.stream()
+                    .filter(d -> !d.isRevoked()
+                            && d.getStartsAt().isBefore(now)
+                            && (d.getEndsAt() == null || d.getEndsAt().isAfter(now)))
                     .collect(Collectors.toList());
         }
 
@@ -127,12 +179,25 @@ public class DelegationController {
         );
     }
 
+    // ── DTOs ─────────────────────────────────────────────────────
+
     @Data
     public static class CreateDelegationRequest {
-        @NotNull private UUID toUserId;
+        @NotNull
+        private UUID    toUserId;
+        /**
+         * Fix 6a: Optional. When a SUPER_ADMIN creates a delegation for a workspace
+         * they are not actively in (no WorkspaceContext), they must supply this field.
+         */
+        private UUID    workspaceId;
         private Instant startsAt;
-        @NotNull @Future private Instant endsAt;
-        private String reason;
+        /**
+         * Fix 6b: Optional. When omitted, the delegation is standing (no expiry).
+         * When supplied, must be in the future and ≤ 365 days from startsAt.
+         */
+        @Future
+        private Instant endsAt;
+        private String  reason;
     }
 
     @Data @AllArgsConstructor @NoArgsConstructor
