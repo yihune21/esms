@@ -64,8 +64,12 @@ public class ReminderController {
      */
     @PostMapping
     @PreAuthorize("hasAuthority('SCHEDULE_MANAGE')")
-    public ResponseEntity<ReminderDto> create(@Valid @RequestBody CreateReminderRequest req) {
+    public ResponseEntity<?> create(@Valid @RequestBody CreateReminderRequest req) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
+        if (wsId == null) {
+            return ResponseEntity.badRequest()
+                    .body(java.util.Map.of("title", "No workspace context — select a workspace before managing reminders"));
+        }
         Reminder r = reminderService.create(
                 wsId,
                 req.getName(),
@@ -80,9 +84,13 @@ public class ReminderController {
 
     @PatchMapping("/{id}")
     @PreAuthorize("hasAuthority('SCHEDULE_MANAGE')")
-    public ResponseEntity<ReminderDto> update(@PathVariable UUID id,
+    public ResponseEntity<?> update(@PathVariable UUID id,
                                                @RequestBody java.util.Map<String, Object> updates) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
+        if (wsId == null) {
+            return ResponseEntity.badRequest()
+                    .body(java.util.Map.of("title", "No workspace context — select a workspace before managing reminders"));
+        }
         Reminder r = reminderService.update(wsId, id, updates);
         return ResponseEntity.ok(toDto(r));
     }
@@ -91,9 +99,13 @@ public class ReminderController {
 
     @GetMapping
     @PreAuthorize("hasAnyAuthority('SCHEDULE_VIEW','SCHEDULE_MANAGE')")
-    public ResponseEntity<List<ReminderDto>> list(
+    public ResponseEntity<?> list(
             @RequestParam(required = false) String status) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
+        if (wsId == null) {
+            return ResponseEntity.badRequest()
+                    .body(java.util.Map.of("title", "No workspace context — select a workspace before viewing reminders"));
+        }
         List<ReminderDto> result = reminderService.list(wsId, status)
                 .stream()
                 .map(this::toDto)
@@ -105,8 +117,12 @@ public class ReminderController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('SCHEDULE_VIEW','SCHEDULE_MANAGE')")
-    public ResponseEntity<ReminderDto> getById(@PathVariable UUID id) {
+    public ResponseEntity<?> getById(@PathVariable UUID id) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
+        if (wsId == null) {
+            return ResponseEntity.badRequest()
+                    .body(java.util.Map.of("title", "No workspace context"));
+        }
         return ResponseEntity.ok(toDto(reminderService.getById(wsId, id)));
     }
 
@@ -114,15 +130,23 @@ public class ReminderController {
 
     @PostMapping("/{id}/deactivate")
     @PreAuthorize("hasAuthority('SCHEDULE_MANAGE')")
-    public ResponseEntity<ReminderDto> deactivate(@PathVariable UUID id) {
+    public ResponseEntity<?> deactivate(@PathVariable UUID id) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
+        if (wsId == null) {
+            return ResponseEntity.badRequest()
+                    .body(java.util.Map.of("title", "No workspace context"));
+        }
         return ResponseEntity.ok(toDto(reminderService.deactivate(wsId, id)));
     }
 
     @PostMapping("/{id}/activate")
     @PreAuthorize("hasAuthority('SCHEDULE_MANAGE')")
-    public ResponseEntity<ReminderDto> activate(@PathVariable UUID id) {
+    public ResponseEntity<?> activate(@PathVariable UUID id) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
+        if (wsId == null) {
+            return ResponseEntity.badRequest()
+                    .body(java.util.Map.of("title", "No workspace context"));
+        }
         return ResponseEntity.ok(toDto(reminderService.activate(wsId, id)));
     }
 
@@ -134,6 +158,10 @@ public class ReminderController {
     @PreAuthorize("hasAuthority('SCHEDULE_MANAGE')")
     public ResponseEntity<?> triggerNow(@PathVariable UUID id) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
+        if (wsId == null) {
+            return ResponseEntity.badRequest()
+                    .body(java.util.Map.of("title", "No workspace context"));
+        }
         reminderService.triggerNow(wsId, id);
         return ResponseEntity.accepted().build();
     }

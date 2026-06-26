@@ -42,11 +42,24 @@ public class TemplateController {
     @GetMapping
     @PreAuthorize("hasAuthority('TEMPLATE_VIEW')")
     public ResponseEntity<List<TemplateDto>> list(
-            @RequestParam(required = false) String status) {
-        UUID wsId = WorkspaceContext.currentWorkspaceId();
-        List<Template> templates = status != null
-                ? templateRepo.findByWorkspaceIdAndStatusOrderByCreatedAtDesc(wsId, status)
-                : templateRepo.findByWorkspaceIdOrderByCreatedAtDesc(wsId);
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) UUID workspaceId) {
+        boolean isSuperAdmin = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"));
+
+        List<Template> templates;
+        if (isSuperAdmin && workspaceId == null) {
+            // Super admin with no specific workspace: see all templates across all departments
+            templates = status != null
+                    ? templateRepo.findByStatusOrderByCreatedAtDesc(status)
+                    : templateRepo.findAllByOrderByCreatedAtDesc();
+        } else {
+            UUID wsId = workspaceId != null ? workspaceId : WorkspaceContext.currentWorkspaceId();
+            templates = status != null
+                    ? templateRepo.findByWorkspaceIdAndStatusOrderByCreatedAtDesc(wsId, status)
+                    : templateRepo.findByWorkspaceIdOrderByCreatedAtDesc(wsId);
+        }
         return ResponseEntity.ok(templates.stream().map(this::toDto).collect(Collectors.toList()));
     }
 
@@ -136,7 +149,14 @@ public class TemplateController {
                                 .body(Map.of("title", "Only DRAFT templates can be approved"));
                     }
                     UUID actorId = WorkspaceContext.currentUserId();
-                    if (t.getCreatedBy().equals(actorId)) {
+                    // Fix #1: DEPT_HEAD and SUPER_ADMIN may approve their own template
+                    boolean isSuperAdmin = org.springframework.security.core.context.SecurityContextHolder
+                            .getContext().getAuthentication().getAuthorities().stream()
+                            .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"));
+                    boolean isDeptHead = org.springframework.security.core.context.SecurityContextHolder
+                            .getContext().getAuthentication().getAuthorities().stream()
+                            .anyMatch(a -> a.getAuthority().equals("ROLE_DEPT_HEAD"));
+                    if (t.getCreatedBy().equals(actorId) && !isSuperAdmin && !isDeptHead) {
                         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                                 .body(Map.of("title", "The creator cannot approve their own template"));
                     }

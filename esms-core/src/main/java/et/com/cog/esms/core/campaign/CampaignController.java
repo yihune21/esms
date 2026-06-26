@@ -49,18 +49,30 @@ public class CampaignController {
 
     @PostMapping
     @PreAuthorize("hasAuthority('CAMPAIGN_DRAFT')")
-    public ResponseEntity<CampaignDto> create(@Valid @RequestBody CreateCampaignRequest req) {
+    public ResponseEntity<?> create(@Valid @RequestBody CreateCampaignRequest req) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
-        Campaign c = campaignService.create(wsId, req.getName(), req.getKind(),
-                req.getTemplateId(), req.getRecipientGroupId(), req.getUploadId(),
-                req.getCustomBody(), req.getScheduledAt());
-        return ResponseEntity.status(HttpStatus.CREATED).body(toDto(c));
+        try {
+            Campaign c = campaignService.create(wsId, req.getName(), req.getKind(),
+                    req.getTemplateId(), req.getRecipientGroupId(), req.getUploadId(),
+                    req.getCustomBody(), req.getScheduledAt());
+            return ResponseEntity.status(HttpStatus.CREATED).body(toDto(c));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("title", e.getMessage()));
+        }
     }
 
     @PostMapping("/{id}/submit")
     @PreAuthorize("hasAuthority('CAMPAIGN_SUBMIT')")
-    public ResponseEntity<CampaignDto> submit(@PathVariable UUID id) {
-        return ResponseEntity.ok(toDto(campaignService.submit(id)));
+    public ResponseEntity<?> submit(@PathVariable UUID id) {
+        try {
+            UUID actorId = WorkspaceContext.currentUserId();
+            return ResponseEntity.ok(toDto(campaignService.submit(id, actorId)));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(Map.of("title", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("title", e.getMessage()));
+        }
     }
 
     @PostMapping("/{id}/approve")
@@ -90,7 +102,12 @@ public class CampaignController {
         }
 
         String n = note != null ? note.getNote() : null;
-        return ResponseEntity.ok(toDto(campaignService.approve(id, n)));
+        try {
+            return ResponseEntity.ok(toDto(campaignService.approve(id, n)));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(null);
+        }
     }
 
     @PostMapping("/{id}/reject")
@@ -113,10 +130,16 @@ public class CampaignController {
 
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAuthority('CAMPAIGN_CANCEL')")
-    public ResponseEntity<CampaignDto> cancel(@PathVariable UUID id,
+    public ResponseEntity<?> cancel(@PathVariable UUID id,
                                                @RequestBody(required = false) NoteRequest note) {
-        String n = note != null ? note.getNote() : null;
-        return ResponseEntity.ok(toDto(campaignService.cancel(id, n)));
+        try {
+            String n = note != null ? note.getNote() : null;
+            return ResponseEntity.ok(toDto(campaignService.cancel(id, n)));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("title", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("title", e.getMessage()));
+        }
     }
 
     private CampaignDto toDto(Campaign c) {
@@ -143,11 +166,13 @@ public class CampaignController {
                 .getAuthentication().getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"));
 
-        if (isSuperAdmin && "00000000-0000-0000-0000-000000000000".equals(String.valueOf(overrideWsId))) {
-            return null; // Platform-level aggregation
-        }
         if (isSuperAdmin && overrideWsId != null) {
-            return overrideWsId;
+            // "00000000-0000-0000-0000-000000000000" sentinel means "all workspaces"
+            return "00000000-0000-0000-0000-000000000000".equals(overrideWsId.toString()) ? null : overrideWsId;
+        }
+        if (isSuperAdmin) {
+            // Fix #3: Super admin with no ?workspaceId= sees ALL campaigns across departments
+            return null;
         }
         return WorkspaceContext.currentWorkspaceId();
     }

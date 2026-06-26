@@ -105,13 +105,22 @@ public class DelegationController {
     /**
      * List all delegations for the current workspace (admin view).
      * Requires ADMIN_DELEGATE authority.
+     * Fix #8: Super admin with no workspace context sees delegations across all workspaces.
      */
     @GetMapping
     @PreAuthorize("hasAuthority('ADMIN_DELEGATE')")
     public ResponseEntity<List<DelegationDto>> list(
-            @RequestParam(required = false) Boolean activeOnly) {
-        UUID wsId = WorkspaceContext.currentWorkspaceId();
-        List<Delegation> list = delegationRepo.findByWorkspaceId(wsId);
+            @RequestParam(required = false) Boolean activeOnly,
+            @RequestParam(required = false) UUID workspaceId) {
+        UUID wsId = workspaceId != null ? workspaceId : WorkspaceContext.currentWorkspaceId();
+
+        List<Delegation> list;
+        if (wsId != null) {
+            list = delegationRepo.findByWorkspaceId(wsId);
+        } else {
+            // Super admin with no workspace context: list across all workspaces
+            list = delegationRepo.findAll();
+        }
 
         if (Boolean.TRUE.equals(activeOnly)) {
             Instant now = Instant.now();

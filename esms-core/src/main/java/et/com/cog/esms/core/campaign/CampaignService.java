@@ -45,6 +45,12 @@ public class CampaignService {
         Map.entry("CLAIMS:PENDING_APPROVAL",        Set.of("APPROVED", "DRAFT")),
         Map.entry("MARKETING:PENDING_APPROVAL",     Set.of("APPROVED", "DRAFT")),
         Map.entry("GENERIC:PENDING_APPROVAL",       Set.of("APPROVED", "DRAFT")),
+        // Delegation 2-tier (non-Finance workspaces with DELEGATION permission)
+        Map.entry("DELEGATION:DRAFT",              Set.of("PENDING_HEAD")),
+        Map.entry("DELEGATION:PENDING_HEAD",       Set.of("PENDING_CEO", "DRAFT")),
+        Map.entry("DELEGATION:PENDING_CEO",        Set.of("APPROVED", "DRAFT")),
+        Map.entry("DELEGATION:APPROVED",           Set.of("CANCELLED")),
+        Map.entry("DELEGATION:QUEUED",             Set.of("CANCELLED")),
         // Finance 2-tier
         Map.entry("FINANCE:DRAFT",           Set.of("PENDING_HEAD")),
         Map.entry("FINANCE:PENDING_HEAD",    Set.of("PENDING_CEO", "DRAFT")),
@@ -66,6 +72,15 @@ public class CampaignService {
     public Campaign create(UUID workspaceId, String name, String kind,
                            UUID templateId, UUID recipientGroupId, UUID uploadId,
                            String customBody, Instant scheduledAt) {
+        // Fix #5: scheduled campaigns must have a future scheduledAt
+        if ("SCHEDULED".equals(kind)) {
+            if (scheduledAt == null) {
+                throw new IllegalArgumentException("scheduledAt is required for SCHEDULED campaigns");
+            }
+            if (!scheduledAt.isAfter(Instant.now())) {
+                throw new IllegalArgumentException("scheduledAt must be a future date/time");
+            }
+        }
         Campaign c = Campaign.builder()
                 .workspaceId(workspaceId)
                 .name(name)
@@ -82,9 +97,14 @@ public class CampaignService {
     }
 
     @Transactional
-    public Campaign submit(UUID campaignId) {
+    public Campaign submit(UUID campaignId, UUID actorId) {
         Campaign c = campaignRepo.findById(campaignId)
                 .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
+
+        // Fix #7: only the campaign creator may submit it
+        if (!c.getCreatedBy().equals(actorId)) {
+            throw new IllegalStateException("Only the campaign creator can submit this campaign");
+        }
 
         Workspace ws = workspaceRepo.findById(c.getWorkspaceId())
                 .orElseThrow(() -> new IllegalStateException("Workspace not found"));
@@ -110,8 +130,16 @@ public class CampaignService {
         boolean hasDelegation = permissionRepo.existsByWorkspaceIdAndPermissionCode(ws.getId(), "DELEGATION");
         UUID actorId = WorkspaceContext.currentUserId();
 
-        // Approver ≠ Drafter
-        if (c.getCreatedBy().equals(actorId)) {
+        // Fix #1: DEPT_HEAD and SUPER_ADMIN may approve their own campaign;
+        // plain OPERATOR/other roles may not.
+        boolean isSuperAdmin = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"));
+        boolean isDeptHead = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_DEPT_HEAD"));
+
+        if (c.getCreatedBy().equals(actorId) && !isSuperAdmin && !isDeptHead) {
             throw new IllegalStateException("The drafter cannot approve their own campaign");
         }
 
@@ -279,7 +307,17 @@ public class CampaignService {
     // ── Internal ─────────────────────────────────────────────────
 
     private void validateTransition(String wsKind, String fromState, String toState, boolean hasDelegation) {
-        String key = (hasDelegation ? "FINANCE" : wsKind) + ":" + fromState;
+        // For non-Finance workspaces with delegation, use "DELEGATION" key;
+        // for Finance workspace, keep "FINANCE"; otherwise use the actual wsKind.
+        String effectiveKind;
+        if (hasDelegation && !"FINANCE".equals(wsKind)) {
+            effectiveKind = "DELEGATION";
+        } else if (hasDelegation || "FINANCE".equals(wsKind)) {
+            effectiveKind = "FINANCE";
+        } else {
+            effectiveKind = wsKind;
+        }
+        String key = effectiveKind + ":" + fromState;
         Set<String> allowed = TRANSITIONS.get(key);
         if (allowed == null || !allowed.contains(toState)) {
             throw new IllegalStateException(

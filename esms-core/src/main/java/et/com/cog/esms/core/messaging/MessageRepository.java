@@ -105,6 +105,7 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
      * Daily delivery trend: for each (day, status) pair within the date range
      * returns the count of messages. Used by GET /reports/aggregations/daily.
      *
+     * allWorkspaces=true (super admin) → no workspace filter.
      * CAST(... AS date) truncates the timestamp to calendar-day precision in PostgreSQL.
      */
     @Query(value = """
@@ -112,22 +113,25 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
                m.status                  AS status,
                COUNT(*)                  AS total
         FROM message m
-        WHERE (CAST(:wsId AS uuid) IS NULL OR m.workspace_id = CAST(:wsId AS uuid))
+        WHERE (:allWorkspaces = true OR m.workspace_id = CAST(:wsId AS uuid))
           AND (:from IS NULL OR m.created_at >= :from)
           AND (:to   IS NULL OR m.created_at <= :to)
         GROUP BY CAST(m.created_at AS date), m.status
         ORDER BY CAST(m.created_at AS date)
         """, nativeQuery = true)
     List<DailyTrendPoint> findDailyTrend(
-            @Param("wsId")  UUID    workspaceId,
-            @Param("from")  Instant from,
-            @Param("to")    Instant to
+            @Param("wsId")          UUID    workspaceId,
+            @Param("allWorkspaces") boolean allWorkspaces,
+            @Param("from")          Instant from,
+            @Param("to")            Instant to
     );
 
     /**
      * Per-campaign summary: sent, delivered, failed, and pending counts
      * for every campaign in the workspace within the date range.
      * Used by GET /reports/aggregations/campaigns.
+     *
+     * allWorkspaces=true (super admin) → no workspace filter.
      */
     @Query(value = """
         SELECT m.campaign_id                                             AS campaignId,
@@ -136,7 +140,7 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
                COUNT(*) FILTER (WHERE m.status = 'FAILED')              AS failed,
                COUNT(*) FILTER (WHERE m.status IN ('PENDING','QUEUED')) AS pending
         FROM message m
-        WHERE (CAST(:wsId AS uuid) IS NULL OR m.workspace_id = CAST(:wsId AS uuid))
+        WHERE (:allWorkspaces = true OR m.workspace_id = CAST(:wsId AS uuid))
           AND m.campaign_id IS NOT NULL
           AND (:from IS NULL OR m.created_at >= :from)
           AND (:to   IS NULL OR m.created_at <= :to)
@@ -144,8 +148,9 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
         ORDER BY delivered DESC
         """, nativeQuery = true)
     List<CampaignSummaryPoint> findCampaignSummaries(
-            @Param("wsId")  UUID    workspaceId,
-            @Param("from")  Instant from,
-            @Param("to")    Instant to
+            @Param("wsId")          UUID    workspaceId,
+            @Param("allWorkspaces") boolean allWorkspaces,
+            @Param("from")          Instant from,
+            @Param("to")            Instant to
     );
 }

@@ -14,4 +14,10 @@ public interface TemplateRepository extends JpaRepository<Template, UUID> {
     List<Template> findByWorkspaceIdAndStatusOrderByCreatedAtDesc(UUID workspaceId, String status);
 
     boolean existsByWorkspaceIdAndName(UUID workspaceId, String name);
+
+    /** Super-admin: all templates across all workspaces, newest first. */
+    List<Template> findAllByOrderByCreatedAtDesc();
+
+    /** Super-admin: all templates across all workspaces filtered by status. */
+    List<Template> findByStatusOrderByCreatedAtDesc(String status);
 }

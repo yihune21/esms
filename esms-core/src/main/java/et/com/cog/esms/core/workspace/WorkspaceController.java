@@ -345,6 +345,21 @@ public class WorkspaceController {
         }
 
         var member = memberOpt.get();
+        String currentRole = member.getRole().getCode();
+        String newRole = roleOpt.get().getCode();
+
+        // Fix #6: disallow demoting the last DEPT_HEAD
+        boolean isDemotingLastDeptHead = "DEPT_HEAD".equals(currentRole)
+                && !"DEPT_HEAD".equals(newRole)
+                && memberRepo.findByWorkspaceId(id).stream()
+                       .filter(m -> "DEPT_HEAD".equals(m.getRole().getCode()))
+                       .count() == 1;
+        if (isDemotingLastDeptHead) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("title",
+                            "Cannot demote the last department head. Assign a new head first."));
+        }
+
         member.setRole(roleOpt.get());
         memberRepo.save(member);
 
@@ -362,6 +377,18 @@ public class WorkspaceController {
     public ResponseEntity<?> removeMember(@PathVariable UUID id, @PathVariable UUID userId) {
         if (!memberRepo.existsByWorkspaceIdAndUserId(id, userId)) {
             return ResponseEntity.notFound().build();
+        }
+        // Fix #6: disallow removal if user is the last DEPT_HEAD in this workspace
+        boolean isLastDeptHead = memberRepo.findByWorkspaceId(id).stream()
+                .filter(m -> "DEPT_HEAD".equals(m.getRole().getCode()))
+                .count() == 1
+                && memberRepo.findByWorkspaceIdAndUserId(id, userId)
+                       .map(m -> "DEPT_HEAD".equals(m.getRole().getCode()))
+                       .orElse(false);
+        if (isLastDeptHead) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("title",
+                            "Cannot remove the last department head. Assign a new head first."));
         }
         memberRepo.deleteByWorkspaceIdAndUserId(id, userId);
         return ResponseEntity.noContent().build();
