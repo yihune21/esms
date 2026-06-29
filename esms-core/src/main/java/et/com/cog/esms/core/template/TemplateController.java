@@ -18,15 +18,7 @@ import java.util.stream.Collectors;
 
 /**
  * SMS Template REST controller.
- * Lifecycle: DRAFT → APPROVED → RETIRED.
- *
- * A template can optionally carry its own recipients:
- *   • recipientGroupId — link to an existing contact group.
- *   • Inline recipients (POST/DELETE /templates/{id}/recipients) — fixed phone numbers.
- *
- * When a campaign is created from a template, esms-sender merges both recipient sources.
- *
- * Reference: LLD §4.4
+ * Lifecycle: DRAFT -> APPROVED -> RETIRED.
  */
 @Slf4j
 @RestController
@@ -38,7 +30,6 @@ public class TemplateController {
     private final TemplateRecipientRepository   recipientRepo;
     private final et.com.cog.esms.core.identity.UserRepository userRepo;
 
-    // ── GET /templates ───────────────────────────────────────────
     @GetMapping
     @PreAuthorize("hasAuthority('TEMPLATE_VIEW')")
     public ResponseEntity<List<TemplateDto>> list(
@@ -50,7 +41,6 @@ public class TemplateController {
 
         List<Template> templates;
         if (isSuperAdmin && workspaceId == null) {
-            // Super admin with no specific workspace: see all templates across all departments
             templates = status != null
                     ? templateRepo.findByStatusOrderByCreatedAtDesc(status)
                     : templateRepo.findAllByOrderByCreatedAtDesc();
@@ -63,11 +53,14 @@ public class TemplateController {
         return ResponseEntity.ok(templates.stream().map(this::toDto).collect(Collectors.toList()));
     }
 
-    // ── POST /templates ──────────────────────────────────────────
     @PostMapping
     @PreAuthorize("hasAuthority('TEMPLATE_CREATE')")
     @Transactional
     public ResponseEntity<?> create(@Valid @RequestBody CreateTemplateRequest req) {
+        if (req.getRecipientGroupId() == null && (req.getRecipients() == null || req.getRecipients().isEmpty())) {
+            return ResponseEntity.badRequest().body(Map.of("title", "A template must have at least one recipient (either recipientGroupId or an inline recipient list)"));
+        }
+
         UUID wsId = WorkspaceContext.currentWorkspaceId();
 
         if (templateRepo.existsByWorkspaceIdAndName(wsId, req.getName())) {
@@ -90,7 +83,6 @@ public class TemplateController {
 
         Template saved = templateRepo.save(t);
 
-        // Persist inline recipients if provided
         if (req.getRecipients() != null && !req.getRecipients().isEmpty()) {
             persistRecipients(saved.getId(), req.getRecipients());
         }
@@ -98,7 +90,6 @@ public class TemplateController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(saved));
     }
 
-    // ── GET /templates/{id} ──────────────────────────────────────
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('TEMPLATE_VIEW')")
     public ResponseEntity<TemplateDto> get(@PathVariable UUID id) {
@@ -107,7 +98,6 @@ public class TemplateController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── PATCH /templates/{id} ────────────────────────────────────
     @PatchMapping("/{id}")
     @PreAuthorize("hasAuthority('TEMPLATE_CREATE')")
     @Transactional
@@ -128,6 +118,12 @@ public class TemplateController {
                         String raw = (String) updates.get("recipientGroupId");
                         t.setRecipientGroupId(raw != null ? UUID.fromString(raw) : null);
                     }
+                    if (t.getRecipientGroupId() == null) {
+                        long inlineCount = recipientRepo.countByTemplateId(t.getId());
+                        if (inlineCount == 0) {
+                            return ResponseEntity.badRequest().body(Map.of("title", "A template must have at least one recipient (either recipientGroupId or an inline recipient list)"));
+                        }
+                    }
                     if (updates.containsKey("variables")) {
                         @SuppressWarnings("unchecked")
                         List<String> vars = (List<String>) updates.get("variables");
@@ -138,7 +134,6 @@ public class TemplateController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── POST /templates/{id}/approve ─────────────────────────────
     @PostMapping("/{id}/approve")
     @PreAuthorize("hasAuthority('TEMPLATE_APPROVE')")
     public ResponseEntity<?> approve(@PathVariable UUID id) {
@@ -149,7 +144,6 @@ public class TemplateController {
                                 .body(Map.of("title", "Only DRAFT templates can be approved"));
                     }
                     UUID actorId = WorkspaceContext.currentUserId();
-                    // Fix #1: DEPT_HEAD and SUPER_ADMIN may approve their own template
                     boolean isSuperAdmin = org.springframework.security.core.context.SecurityContextHolder
                             .getContext().getAuthentication().getAuthorities().stream()
                             .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"));
@@ -168,7 +162,6 @@ public class TemplateController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── POST /templates/{id}/reject ──────────────────────────────
     @PostMapping("/{id}/reject")
     @PreAuthorize("hasAuthority('TEMPLATE_APPROVE')")
     public ResponseEntity<?> reject(@PathVariable UUID id, @RequestBody Map<String, String> payload) {
@@ -185,7 +178,6 @@ public class TemplateController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── POST /templates/{id}/retire ──────────────────────────────
     @PostMapping("/{id}/retire")
     @PreAuthorize("hasAuthority('TEMPLATE_APPROVE')")
     public ResponseEntity<?> retire(@PathVariable UUID id) {
@@ -201,7 +193,6 @@ public class TemplateController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── POST /templates/{id}/reactivate ──────────────────────────
     @PostMapping("/{id}/reactivate")
     @PreAuthorize("hasAuthority('TEMPLATE_APPROVE') or hasAuthority('TEMPLATE_CREATE')")
     public ResponseEntity<?> reactivate(@PathVariable UUID id) {
@@ -218,7 +209,6 @@ public class TemplateController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── GET /templates/{id}/recipients ───────────────────────────
     @GetMapping("/{id}/recipients")
     @PreAuthorize("hasAuthority('TEMPLATE_VIEW')")
     public ResponseEntity<List<RecipientDto>> listRecipients(@PathVariable UUID id) {
@@ -232,12 +222,6 @@ public class TemplateController {
         return ResponseEntity.ok(list);
     }
 
-    // ── POST /templates/{id}/recipients ──────────────────────────
-    /**
-     * Add one or more inline recipients to a template.
-     * {@code phoneE164} is required for each entry; duplicates are silently ignored.
-     * Only allowed while the template is in DRAFT status.
-     */
     @PostMapping("/{id}/recipients")
     @PreAuthorize("hasAuthority('TEMPLATE_CREATE')")
     @Transactional
@@ -259,11 +243,6 @@ public class TemplateController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── DELETE /templates/{id}/recipients/{phone} ─────────────────
-    /**
-     * Remove a single recipient by phone number from the template.
-     * Only allowed while the template is in DRAFT status.
-     */
     @DeleteMapping("/{id}/recipients/{phone}")
     @PreAuthorize("hasAuthority('TEMPLATE_CREATE')")
     @Transactional
@@ -275,13 +254,17 @@ public class TemplateController {
                         return ResponseEntity.status(HttpStatus.CONFLICT)
                                 .body(Map.of("title", "Recipients can only be removed from DRAFT templates"));
                     }
+                    if (t.getRecipientGroupId() == null) {
+                        long count = recipientRepo.countByTemplateId(id);
+                        if (count <= 1) {
+                            return ResponseEntity.badRequest().body(Map.of("title", "A template must have at least one recipient. Cannot remove the last recipient."));
+                        }
+                    }
                     recipientRepo.deleteByTemplateIdAndPhoneE164(id, phone);
                     return ResponseEntity.noContent().build();
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
-
-    // ── Helpers ──────────────────────────────────────────────────
 
     private void persistRecipients(UUID templateId, List<RecipientRequest> requests) {
         for (RecipientRequest req : requests) {
@@ -318,14 +301,11 @@ public class TemplateController {
         );
     }
 
-    // ── DTOs ─────────────────────────────────────────────────────
-
     @Data @AllArgsConstructor
     public static class TemplateDto {
         private UUID            id;
         private UUID            workspaceId;
         private String          name;
-        /** Optional description of the template's purpose. */
         private String          description;
         private String          body;
         private String          encoding;
@@ -333,11 +313,8 @@ public class TemplateController {
         private String          rejectionReason;
         private List<String>    variables;
         private String          sender;
-        /** Optional contact group ID used as recipient list. */
         private UUID            recipientGroupId;
-        /** Inline recipients attached directly to this template. */
         private List<RecipientDto> recipients;
-        /** Total number of inline recipients (convenience count). */
         private long            recipientCount;
         private UUID            approvedBy;
         private String          approverName;
@@ -352,39 +329,27 @@ public class TemplateController {
         @NotBlank
         private String name;
 
-        /** Optional description of what this template is used for. */
         private String description;
 
         @NotBlank
         private String body;
 
-        /** GSM7 (default) or UCS2 */
         private String encoding;
 
         private List<String> variables;
         private String sender;
 
-        /**
-         * Optional ID of an existing contact group to use as recipients.
-         * Can be combined with {@code recipients} — the sender merges both.
-         */
         private UUID recipientGroupId;
 
-        /**
-         * Optional inline list of recipients.
-         * Each entry must have a valid phone number (phoneE164 is required).
-         */
         private List<@Valid RecipientRequest> recipients;
     }
 
     @Data
     public static class RecipientRequest {
-        /** Phone number in E.164 format, e.g. +251911234567. Mandatory. */
         @NotBlank(message = "phoneE164 is required for every recipient")
         @Pattern(regexp = "\\+[1-9]\\d{6,14}", message = "phoneE164 must be in E.164 format (e.g. +251911234567)")
         private String phoneE164;
 
-        /** Optional display name. */
         private String name;
     }
 

@@ -17,7 +17,7 @@
 -- ── 1. Add description & recipient_group_id to template ──────────
 ALTER TABLE template
     ADD COLUMN IF NOT EXISTS description        TEXT,
-    ADD COLUMN IF NOT EXISTS recipient_group_id UUID REFERENCES contact_group(id);
+    ADD COLUMN IF NOT EXISTS recipient_group_id UUID NOT NULL REFERENCES contact_group(id);
 
 CREATE INDEX IF NOT EXISTS idx_template_group ON template (recipient_group_id);
 

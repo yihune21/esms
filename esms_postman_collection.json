@@ -1301,7 +1301,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Policy Renewal Reminder\",\n  \"body\": \"Dear {{name}}, your policy {{policyNumber}} expires on {{expiryDate}}. Please renew to stay covered.\",\n  \"encoding\": \"GSM7\"\n}"
+              "raw": "{\n  \"name\": \"Policy Renewal Reminder\",\n  \"body\": \"Dear {{name}}, your policy {{policyNumber}} expires on {{expiryDate}}. Please renew to stay covered.\",\n  \"encoding\": \"GSM7\",\n  \"recipientGroupId\": \"<group_uuid>\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/templates",
@@ -1311,7 +1311,8 @@
               "path": [
                 "templates"
               ]
-            }
+            },
+            "description": "Create a new template. Under the new security model, a template must have at least one recipient source (either a non-null recipientGroupId or a non-empty list of inline recipients)."
           }
         },
         {
@@ -1375,7 +1376,8 @@
                   "value": "<template_uuid>"
                 }
               ]
-            }
+            },
+            "description": "Partially update a DRAFT template. Note: if recipientGroupId is set to null, the template must have at least one inline recipient, otherwise the update is rejected."
           }
         },
         {
@@ -1494,6 +1496,116 @@
               ]
             },
             "description": "Move a RETIRED or REJECTED template back to DRAFT. Requires TEMPLATE_APPROVE or TEMPLATE_CREATE."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /templates/{id}/recipients",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/templates/:id/recipients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "templates",
+                ":id",
+                "recipients"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<template_uuid>"
+                }
+              ]
+            },
+            "description": "Lists all inline recipients for a template."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /templates/{id}/recipients",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"phoneE164\": \"+251911000002\",\n    \"name\": \"Bekele Gerba\"\n  }\n]"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/templates/:id/recipients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "templates",
+                ":id",
+                "recipients"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<template_uuid>"
+                }
+              ]
+            },
+            "description": "Adds one or more inline recipients to a DRAFT template."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /templates/{id}/recipients/{phone}",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/templates/:id/recipients/:phone",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "templates",
+                ":id",
+                "recipients",
+                ":phone"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<template_uuid>"
+                },
+                {
+                  "key": "phone",
+                  "value": "+251911000002"
+                }
+              ]
+            },
+            "description": "Removes a recipient by phone number from a DRAFT template. Note: if recipientGroupId is null, this will be blocked if it's the last remaining recipient."
           },
           "response": []
         }
