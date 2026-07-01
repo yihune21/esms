@@ -31,7 +31,6 @@
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <!-- Dependency versions -->
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <springdoc.version>2.3.0</springdoc.version>
         <resilience4j.version>2.2.0</resilience4j.version>
@@ -45,14 +44,12 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- Internal modules -->
             <dependency>
                 <groupId>et.com.cog.esms</groupId>
                 <artifactId>esms-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
-            <!-- JWT -->
             <dependency>
                 <groupId>io.jsonwebtoken</groupId>
                 <artifactId>jjwt-api</artifactId>
@@ -69,14 +66,12 @@
                 <version>${jjwt.version}</version>
             </dependency>
 
-            <!-- OpenAPI / Swagger -->
             <dependency>
                 <groupId>org.springdoc</groupId>
                 <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
                 <version>${springdoc.version}</version>
             </dependency>
 
-            <!-- Resilience4j -->
             <dependency>
                 <groupId>io.github.resilience4j</groupId>
                 <artifactId>resilience4j-spring-boot3</artifactId>
@@ -93,42 +88,36 @@
                 <version>${resilience4j.version}</version>
             </dependency>
 
-            <!-- MapStruct -->
             <dependency>
                 <groupId>org.mapstruct</groupId>
                 <artifactId>mapstruct</artifactId>
                 <version>${mapstruct.version}</version>
             </dependency>
 
-            <!-- Apache POI (XLSX) -->
             <dependency>
                 <groupId>org.apache.poi</groupId>
                 <artifactId>poi-ooxml</artifactId>
                 <version>${poi.version}</version>
             </dependency>
 
-            <!-- OpenCSV -->
             <dependency>
                 <groupId>com.opencsv</groupId>
                 <artifactId>opencsv</artifactId>
                 <version>${opencsv.version}</version>
             </dependency>
 
-            <!-- JSMPP — SMPP 3.4 client library -->
             <dependency>
                 <groupId>org.jsmpp</groupId>
                 <artifactId>jsmpp</artifactId>
                 <version>3.0.0</version>
             </dependency>
 
-            <!-- Commons Codec -->
             <dependency>
                 <groupId>commons-codec</groupId>
                 <artifactId>commons-codec</artifactId>
                 <version>${commons-codec.version}</version>
             </dependency>
 
-            <!-- Testcontainers -->
             <dependency>
                 <groupId>org.testcontainers</groupId>
                 <artifactId>testcontainers-bom</artifactId>
@@ -139,7 +128,6 @@
         </dependencies>
     </dependencyManagement>
 
-    <!-- Shared dependencies for all modules -->
     <dependencies>
         <dependency>
             <groupId>org.projectlombok</groupId>

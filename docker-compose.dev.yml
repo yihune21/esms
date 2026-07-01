@@ -1,13 +1,6 @@
-# ===================================================================
-# eSMS Platform — Local Development Stack
-# ===================================================================
-# Usage: docker compose -f docker-compose.dev.yml up -d
-# ===================================================================
-
 version: "3.9"
 
 services:
-  # ── PostgreSQL 15 ────────────────────────────
   postgres:
     image: postgres:15-alpine
     container_name: esms-postgres
@@ -25,7 +18,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── RabbitMQ 3.12 ────────────────────────────
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
     container_name: esms-rabbitmq
@@ -33,8 +25,8 @@ services:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     ports:
-      - "5672:5672"     # AMQP
-      - "15672:15672"   # Management UI
+      - "5672:5672"
+      - "15672:15672"
     volumes:
       - esms-rmq-data:/var/lib/rabbitmq
     healthcheck:
@@ -43,7 +35,6 @@ services:
       timeout: 10s
       retries: 5
 
-  # ── Redis 7 ──────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: esms-redis
@@ -57,7 +48,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── eSMS Core (API Gateway) ───────────────────
   esms-core:
     build:
       context: .
@@ -66,23 +56,19 @@ services:
     ports:
       - "8080:8080"
     environment:
-      # Database
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: esms
       DB_USER: esms
       DB_PASSWORD: esms_dev_password
-      # RabbitMQ
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: guest
       RABBITMQ_PASSWORD: guest
       RABBITMQ_VHOST: /
-      # Redis
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ""
-      # App
       APP_PORT_CORE: 8080
       JWT_SECRET: dev-secret-key-change-in-production-must-be-at-least-256-bits-long!!
       AD_ENABLED: "false"
@@ -94,14 +80,17 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://localhost:8080/actuator/health || exit 1",
+        ]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 60s
     restart: on-failure
 
-  # ── eSMS Sender (SMPP Worker) ─────────────────
   esms-sender:
     build:
       context: .
@@ -110,20 +99,17 @@ services:
     ports:
       - "8081:8081"
     environment:
-      # RabbitMQ
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: guest
       RABBITMQ_PASSWORD: guest
       RABBITMQ_VHOST: /
-      # Redis
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ""
-      # App
       APP_PORT_SENDER: 8081
       SENDER_CONCURRENCY_NIB: 50
-      # NIB SMSC — loaded from .env file
+
       NIB_SMSC_HOST: ${NIB_SMSC_HOST}
       NIB_SMSC_PORT: ${NIB_SMSC_PORT}
       NIB_SMSC_SYSTEM_ID: ${NIB_SMSC_SYSTEM_ID}
@@ -137,7 +123,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://localhost:8081/actuator/health || exit 1",
+        ]
       interval: 30s
       timeout: 10s
       retries: 5
