@@ -37,28 +37,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * SMPP 3.4 Gateway — connects to the NIB internal SMSC which routes to
- * both Ethio Telecom (09xx) and Safaricom Ethiopia (07xx) automatically.
- *
- * <p>Features:
- * <ul>
- *   <li>TRANSCEIVER bind — one session for send and receive (DLRs)</li>
- *   <li>Auto-reconnect with configurable delay</li>
- *   <li>Long-SMS splitting via SAR TLVs (segments reassembled at handset)</li>
- *   <li>DLR receipts translated to {@link StatusEvent} and published to RabbitMQ</li>
- * </ul>
- *
- * Reference: LLD §11, SMPP 3.4 spec §4.4 / §4.6
- */
+
 @Slf4j
 @Component
 @EnableConfigurationProperties(SmppProperties.class)
 @RequiredArgsConstructor
 public class NibSmscSmsGateway implements SmsGateway {
 
-    // GSM-7: 160 chars single, 153 per segment (with UDH)
-    // UCS-2: 70 chars single,  67 per segment (with UDH)
     private static final int MAX_GSM7  = 160;
     private static final int MAX_UCS2  = 70;
     private static final int SEG_GSM7  = 153;
@@ -78,10 +63,7 @@ public class NibSmscSmsGateway implements SmsGateway {
                 return t;
             });
 
-    // =========================================================================
-    // Lifecycle
-    // =========================================================================
-
+ 
     @PostConstruct
     public void connect() {
         running.set(true);
@@ -106,9 +88,6 @@ public class NibSmscSmsGateway implements SmsGateway {
         }
     }
 
-    // =========================================================================
-    // SmsGateway contract
-    // =========================================================================
 
     @Override
     public SendResult sendSms(SendRequest request) {
@@ -174,10 +153,7 @@ public class NibSmscSmsGateway implements SmsGateway {
         return Carrier.NIB_SMSC;
     }
 
-    /**
-     * DLRs arrive in-band via SMPP deliver_sm and are handled by
-     * {@link SmppDeliveryReceiptListener} — this HTTP-style method is not used.
-     */
+
     @Override
     public StatusEvent translateDlr(Map<String, Object> carrierPayload) {
         log.warn("translateDlr() called on NibSmscSmsGateway — DLRs arrive via SMPP deliver_sm");
@@ -191,9 +167,6 @@ public class NibSmscSmsGateway implements SmsGateway {
         return reconnecting.get() ? HealthStatus.DEGRADED : HealthStatus.UNAVAILABLE;
     }
 
-    // =========================================================================
-    // Session management
-    // =========================================================================
 
     private void bindSession() {
         if (!running.get()) return;
@@ -261,9 +234,6 @@ public class NibSmscSmsGateway implements SmsGateway {
                 || s == SessionState.BOUND_RX;
     }
 
-    // =========================================================================
-    // Submit helpers
-    // =========================================================================
 
     private String submitSingle(SMPPSession session, SendRequest req,
                                 String senderId, Alphabet alphabet, boolean useUcs2)
@@ -333,11 +303,7 @@ public class NibSmscSmsGateway implements SmsGateway {
         return lastId;
     }
 
-    // =========================================================================
-    // Encoding detection
-    // =========================================================================
 
-    /** Returns true if the text requires UCS-2 (e.g. Amharic / Ge'ez characters). */
     private boolean needsUcs2(String text) {
         final String gsm7 = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\u001bÆæßÉ !\"#¤%&'()*+,-./"
                 + "0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -348,15 +314,6 @@ public class NibSmscSmsGateway implements SmsGateway {
         return false;
     }
 
-    // =========================================================================
-    // Inner class — DLR listener
-    // =========================================================================
-
-    /**
-     * Receives inbound deliver_sm PDUs on the TRANSCEIVER session.
-     * Delivery receipts are parsed and published to RabbitMQ as StatusEvents.
-     * Core then matches via carrierMsgId → internal messageId.
-     */
     private class SmppDeliveryReceiptListener implements MessageReceiverListener {
 
         @Override
@@ -395,7 +352,6 @@ public class NibSmscSmsGateway implements SmsGateway {
 
                 log.info("SMPP DLR — smppMsgId={} stat={} → {}", smppMsgId, stat, status);
 
-                // Core matches smppMsgId (carrierMsgId) to internal messageId
                 statusPublisher.publish(StatusEvent.builder()
                         .carrierMsgId(smppMsgId)
                         .status(status)
@@ -408,13 +364,7 @@ public class NibSmscSmsGateway implements SmsGateway {
             }
         }
 
-        /**
-         * Maps SMPP 3.4 delivery receipt final state to platform MessageStatus.
-         * Spec §5.2.28:
-         *   ENROUTE/ACCEPTD → in transit   → SENT
-         *   DELIVRD         → delivered    → DELIVERED
-         *   everything else → final error  → FAILED
-         */
+        
         private MessageStatus toMessageStatus(DeliveryReceiptState state) {
             return switch (state) {
                 case DELIVRD           -> MessageStatus.DELIVERED;
@@ -424,9 +374,6 @@ public class NibSmscSmsGateway implements SmsGateway {
         }
     }
 
-    // =========================================================================
-    // Inner class — session state listener (auto-reconnect trigger)
-    // =========================================================================
 
     private class SmppSessionStateListener implements SessionStateListener {
         @Override

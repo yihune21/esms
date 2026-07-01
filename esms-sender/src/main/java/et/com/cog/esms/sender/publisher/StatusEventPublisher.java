@@ -8,9 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
-/**
- * Publishes StatusEvent messages to sms.dlr.q for eSMS-Core to consume.
- */
+
 @Slf4j
 @Component
 @RequiredArgsConstructor

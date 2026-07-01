@@ -5,10 +5,7 @@ import org.springframework.amqp.core.*;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * RabbitMQ topology for the Sender side.
- * Ensures the queues and exchanges exist when Sender starts.
- */
+
 @Configuration
 public class SenderRabbitConfig {
 

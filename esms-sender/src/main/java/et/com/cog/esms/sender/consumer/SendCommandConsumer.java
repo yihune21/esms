@@ -11,18 +11,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-// import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import com.rabbitmq.client.Channel;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.util.List;
 
-/**
- * Consumes SendCommand messages from sms.send.q and dispatches via the appropriate gateway.
- * Emits StatusEvents to sms.dlr.q for Core to consume.
- * Reference: HLD §8.4, LLD §10
- */
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -31,7 +25,6 @@ public class SendCommandConsumer {
     private final SmsGateway gateway;
     private final StatusEventPublisher statusPublisher;
     private final ObjectMapper objectMapper;
-    // private final RabbitTemplate rabbitTemplate;
 
     @RabbitListener(queues = QueueConstants.QUEUE_SEND, ackMode = "MANUAL")
     public void onMessage(Message message, Channel channel) throws Exception {
@@ -44,7 +37,6 @@ public class SendCommandConsumer {
             log.info("Received SendCommand: messageId={}, to={}, carrier={}",
                     cmd.getMessageId(), cmd.getTo(), cmd.getResolvedCarrier());
 
-            // Emit QUEUED status
             statusPublisher.publish(StatusEvent.builder()
                     .messageId(cmd.getMessageId())
                     .workspaceId(cmd.getWorkspaceId())
@@ -53,7 +45,6 @@ public class SendCommandConsumer {
                     .timestamp(Instant.now())
                     .build());
 
-            // Send using the single NIB SMSC gateway
             SmsGateway.SendResult result = gateway.sendSms(new SmsGateway.SendRequest(
                     cmd.getMessageId().toString(),
                     cmd.getTo(),
@@ -87,7 +78,6 @@ public class SendCommandConsumer {
 
         } catch (Exception e) {
             log.error("Error processing SendCommand: {}", e.getMessage(), e);
-            // Reject and requeue (will go to DLQ after max retries)
             channel.basicNack(deliveryTag, false, false);
         }
     }

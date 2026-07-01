@@ -1,15 +1,7 @@
-# ===================================================================
-# eSMS-Core — Application Configuration
-# ===================================================================
-# Profile: default (dev). Override in production via env vars.
-# Reference: LLD §15 Configuration Reference
-# ===================================================================
-
 spring:
   application:
     name: esms-core
 
-  # --- Database (PostgreSQL) ---
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:esms}
     username: ${DB_USER:esms}
@@ -31,13 +23,11 @@ spring:
         jdbc:
           time_zone: UTC
 
-  # --- Flyway ---
   flyway:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: false
 
-  # --- Redis ---
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -45,7 +35,6 @@ spring:
       password: ${REDIS_PASSWORD:}
       timeout: 3000
 
-  # --- RabbitMQ ---
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
@@ -59,31 +48,23 @@ spring:
         acknowledge-mode: manual
         prefetch: 10
 
-  # --- File uploads ---
   servlet:
     multipart:
       max-file-size: 25MB
       max-request-size: 25MB
 
-  # --- Jackson ---
   jackson:
     serialization:
       write-dates-as-timestamps: false
     default-property-inclusion: non_null
     time-zone: UTC
 
-# ===================================================================
-# Server
-# ===================================================================
 server:
   port: ${APP_PORT_CORE:8080}
   error:
     include-message: never
     include-stacktrace: never
 
-# ===================================================================
-# Actuator (Health / Ready / Metrics)
-# ===================================================================
 management:
   endpoints:
     web:
@@ -93,9 +74,6 @@ management:
     health:
       show-details: when-authorized
 
-# ===================================================================
-# OpenAPI / Swagger
-# ===================================================================
 springdoc:
   api-docs:
     path: /v3/api-docs
@@ -104,18 +82,14 @@ springdoc:
     tags-sorter: alpha
     operations-sorter: alpha
 
-# ===================================================================
-# Application-specific configuration
-# Matches LLD §15 configuration reference
-# ===================================================================
 app:
   security:
     jwt:
       secret: ${JWT_SECRET:dev-secret-key-change-in-production-must-be-at-least-256-bits-long!!}
-      access-token-ttl: PT5M          # 5 minutes (contractual)
-      refresh-token-ttl: PT8H         # 8 hours absolute cap
+      access-token-ttl: PT5M
+      refresh-token-ttl: PT8H
       issuer: esms-core
-    idle-threshold: PT5M               # 5-minute idle timeout (contractual)
+    idle-threshold: PT5M
     otp:
       ttl: PT5M
       length: 6
@@ -123,20 +97,20 @@ app:
       resend-cooldown: PT30S
       max-resends: 3
     lockout:
-      threshold: 5                     # failed attempts before lockout
+      threshold: 5
       duration: PT15M
       ip-threshold: 20
       ip-window: PT15M
 
   upload:
-    max-size: 26214400                 # 25 MB in bytes
+    max-size: 26214400
     allowed-extensions: xlsx,csv
 
   campaign:
     recipients-max: 50000
 
   retention:
-    period: P1Y                        # 1 year (contractual)
+    period: P1Y
 
   ad:
     enabled: ${AD_ENABLED:false}
@@ -149,13 +123,10 @@ app:
     read-timeout: 5000
 
   scheduler:
-    expiry-cron: "0 0 4 * * *"         # 07:00 Africa/Addis_Ababa = 04:00 UTC
-    retention-cron: "0 0 2 * * *"      # 02:00 UTC daily
+    expiry-cron: "0 0 4 * * *"
+    retention-cron: "0 0 2 * * *"
     timezone: Africa/Addis_Ababa
 
-# ===================================================================
-# Logging — structured JSON in production
-# ===================================================================
 logging:
   level:
     root: INFO

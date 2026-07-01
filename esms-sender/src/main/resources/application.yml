@@ -1,12 +1,7 @@
-# ===================================================================
-# eSMS-Sender — Application Configuration
-# ===================================================================
-
 spring:
   application:
     name: esms-sender
 
-  # --- RabbitMQ ---
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
@@ -22,7 +17,6 @@ spring:
         concurrency: 5
         max-concurrency: 20
 
-  # --- Redis (for gateway health state cache) ---
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -35,18 +29,12 @@ spring:
     default-property-inclusion: non_null
     time-zone: UTC
 
-# ===================================================================
-# Server
-# ===================================================================
 server:
   port: ${APP_PORT_SENDER:8081}
   error:
     include-message: never
     include-stacktrace: never
 
-# ===================================================================
-# Actuator
-# ===================================================================
 management:
   endpoints:
     web:
@@ -56,9 +44,6 @@ management:
     health:
       show-details: when-authorized
 
-# ===================================================================
-# Application — Sender-specific configuration
-# ===================================================================
 app:
   sender:
     concurrency:
@@ -73,34 +58,23 @@ app:
       backoff-steps: "30s,2m,10m,1h"
 
   gateway:
-    # ------------------------------------------------------------------
-    # NIB Internal SMSC — SMPP 3.4 aggregator for BOTH Ethio Telecom
-    # and Safaricom Ethiopia.
-    # Gateway cannot connect outside the NIB network (SSH access pending).
-    # ------------------------------------------------------------------
     nib-smsc:
-      host: ${NIB_SMSC_HOST}
-      port: ${NIB_SMSC_PORT}
-      system-id: ${NIB_SMSC_SYSTEM_ID}
-      password: ${NIB_SMSC_PASSWORD}
-      system-type: ""
-      address-range: ""
-      source-address-ton: 5 # 5=Alphanumeric (sender ID like "NIB")
-      source-address-npi: 0 # 0=Unknown (required for alphanumeric TON)
-      dest-address-ton: 1 # 1=International (251xxxxxxxxx)
-      dest-address-npi: 1 # 1=ISDN/telephone
-      default-sender-id: ${NIB_SMSC_SENDER_ID}
-      enquire-link-timer: 30 # seconds between keepalive pings
-      bind-timeout-ms: 10000
-      reconnect-delay-ms: 30000
-      max-reconnect-attempts: 0 # 0=unlimited
+    host: ${NIB_SMSC_HOST}
+    port: ${NIB_SMSC_PORT}
+    system-id: ${NIB_SMSC_SYSTEM_ID}
+    password: ${NIB_SMSC_PASSWORD}
+    system-type: ""
+    address-range: ""
+    source-address-ton: 5
+    source-address-npi: 0
+    dest-address-ton: 1
+    dest-address-npi: 1
+    default-sender-id: ${NIB_SMSC_SENDER_ID}
+    enquire-link-timer: 30
+    bind-timeout-ms: 10000
+    reconnect-delay-ms: 30000
+    max-reconnect-attempts: 0
 
-  # webhook:
-  #   hmac-secret: ${WEBHOOK_HMAC_SECRET:dev-hmac-secret}
-
-# ===================================================================
-# Resilience4j — Circuit Breaker per carrier
-# ===================================================================
 resilience4j:
   circuitbreaker:
     instances:
@@ -112,9 +86,6 @@ resilience4j:
         permittedNumberOfCallsInHalfOpenState: 5
         minimumNumberOfCalls: 10
 
-# ===================================================================
-# Logging
-# ===================================================================
 logging:
   level:
     root: INFO
