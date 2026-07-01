@@ -12,10 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 
-/**
- * JWT issuance and validation.
- * Claims include userId, workspaceId, roleCode, and permissions[].
- */
+
 @Slf4j
 @Component
 public class JwtTokenProvider {
@@ -36,10 +33,7 @@ public class JwtTokenProvider {
         this.issuer = issuer;
     }
 
-    /**
-     * Issue a pre-auth token (before OTP verification).
-     * Contains only the userId — no workspace or permissions.
-     */
+
     public String createPreAuthToken(UUID userId, String username) {
         Instant now = Instant.now();
         return Jwts.builder()
@@ -54,9 +48,7 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    /**
-     * Issue a full access token after OTP verification.
-     */
+
     public String createAccessToken(UUID userId, String username,
                                      UUID workspaceId, String roleCode,
                                      List<String> permissions) {
@@ -76,9 +68,7 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    /**
-     * Issue a refresh token (long-lived, stored in HttpOnly cookie).
-     */
+
     public String createRefreshToken(UUID userId) {
         Instant now = Instant.now();
         return Jwts.builder()
@@ -92,9 +82,7 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    /**
-     * Parse and validate a token. Returns null if invalid/expired.
-     */
+
     public Claims parseToken(String token) {
         try {
             return Jwts.parser()

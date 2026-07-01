@@ -22,13 +22,11 @@ public interface UserActivityLogRepository extends JpaRepository<UserActivityLog
 
     Page<UserActivityLog> findByWorkspaceIdAndCreatedAtBetween(UUID workspaceId, Instant from, Instant to, Pageable pageable);
 
-    /** Count distinct users active in a workspace in the last N days. */
     @Query("SELECT COUNT(DISTINCT u.userId) FROM UserActivityLog u " +
            "WHERE (:wsId IS NULL OR u.workspaceId = :wsId) " +
            "AND u.createdAt >= :since")
     long countActiveUsersSince(@Param("wsId") UUID workspaceId, @Param("since") Instant since);
 
-    /** Action frequency breakdown (for the role/action chart on Reports → Users & Access). */
     @Query("SELECT u.action AS action, COUNT(u) AS total FROM UserActivityLog u " +
            "WHERE (:wsId IS NULL OR u.workspaceId = :wsId) " +
            "AND (:since IS NULL OR u.createdAt >= :since) " +

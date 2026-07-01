@@ -14,11 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * Consumes StatusEvents from sms.dlr.q (published by eSMS-Sender)
- * and updates the canonical message status in the DB.
- * Reference: LLD §10.2
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -40,10 +35,8 @@ public class StatusEventConsumer {
             log.info("DLR received: messageId={}, status={}, carrier={}",
                     event.getMessageId(), event.getStatus(), event.getCarrier());
 
-            // Update the canonical message record and persist status event history
             messageRepo.findById(event.getMessageId()).ifPresentOrElse(
                     msg -> {
-                        // Persist status event history using workspaceId from Message if null in event
                         UUID wsId = event.getWorkspaceId() != null ? event.getWorkspaceId() : msg.getWorkspaceId();
                         MessageStatusEvent statusRecord = MessageStatusEvent.builder()
                                 .messageId(event.getMessageId())

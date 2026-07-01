@@ -11,10 +11,7 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * AMQP message published by eSMS-Core onto sms.send.q,
- * consumed by eSMS-Sender.
- */
+
 @Data
 @Builder
 @NoArgsConstructor

@@ -26,9 +26,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * JWT Authentication + Workspace Context filter.
- */
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -90,7 +88,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         List<String> effectivePermissions = new ArrayList<>(jwtPermissions);
 
-        // Check database-level super admin
         boolean isDbSuperAdmin = false;
         try {
             isDbSuperAdmin = memberRepo.findByUserId(userId).stream()
@@ -111,7 +108,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String effectiveRoleCode = isDbSuperAdmin ? "SUPER_ADMIN" : roleCode;
 
-        // Inject delegation-based CEO authorities if active
         boolean isDelegating = false;
         try {
             List<Delegation> activeDelegations = workspaceId != null

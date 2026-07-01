@@ -46,7 +46,6 @@ public class ReportExportWorker {
         }
 
         try {
-            // Fetch messages matching filters (max 100,000 to prevent OOM)
             List<Message> messages = messageRepo.findFiltered(
                     export.getWorkspaceId(),
                     req.getFrom(),
@@ -59,7 +58,6 @@ public class ReportExportWorker {
 
             log.info("Fetched {} messages for export job {}", messages.size(), exportId);
 
-            // Ensure exports directory exists
             File dir = new File("exports");
             if (!dir.exists()) {
                 dir.mkdirs();
@@ -94,14 +92,12 @@ public class ReportExportWorker {
              FileOutputStream out = new FileOutputStream(file)) {
             Sheet sheet = workbook.createSheet("Messages");
 
-            // Header row
             Row header = sheet.createRow(0);
             String[] columns = {"Message ID", "To Number", "Status", "Campaign ID", "Carrier", "Sent At", "Delivered At", "Created At"};
             for (int i = 0; i < columns.length; i++) {
                 header.createCell(i).setCellValue(columns[i]);
             }
 
-            // Data rows
             int rowNum = 1;
             for (Message m : messages) {
                 Row row = sheet.createRow(rowNum++);
@@ -115,7 +111,6 @@ public class ReportExportWorker {
                 row.createCell(7).setCellValue(m.getCreatedAt() != null ? m.getCreatedAt().toString() : "");
             }
 
-            // Auto-size all columns for readability
             for (int i = 0; i < columns.length; i++) {
                 sheet.autoSizeColumn(i);
             }

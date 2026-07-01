@@ -7,10 +7,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * Delegation model mapping to the delegation table.
- * Reference: LLD §4.1, V001__workspace_and_identity.sql
- */
+
 @Entity
 @Table(name = "delegation")
 @Getter @Setter

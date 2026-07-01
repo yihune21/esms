@@ -7,10 +7,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Response body for GET /reports/messages.
- * Reference: LLD §6.7
- */
+
 @Data
 @AllArgsConstructor
 public class DeliveryReport {

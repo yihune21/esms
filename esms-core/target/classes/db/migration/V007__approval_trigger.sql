@@ -1,8 +1,3 @@
--- ===================================================================
--- V007: Approval Transition Trigger
--- Reference: LLD §7.2
--- ===================================================================
-
 CREATE OR REPLACE FUNCTION check_approval_transition()
 RETURNS TRIGGER AS $$
 BEGIN

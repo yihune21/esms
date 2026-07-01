@@ -36,24 +36,20 @@ public class AuthController {
     private final UserRepository userRepository;
     private final WorkspaceMemberRepository memberRepository;
 
-    // ── POST /auth/login ─────────────────────────────────────────
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req,
                                    HttpServletRequest httpReq) {
         String ip = getClientIp(httpReq);
 
-        // Check IP block
         if (lockoutService.isIpBlocked(ip)) {
             return problem(429, "Too many requests from this IP");
         }
 
-        // Check account lockout
         if (lockoutService.isLocked(req.getUsername())) {
             return problem(423, "Account locked");
         }
 
-        // Authenticate against local DB (AD integration can be added here)
         var userOpt = userRepository.findByUsername(req.getUsername());
         if (userOpt.isEmpty()) {
             lockoutService.recordFailure(req.getUsername(), ip);
@@ -71,14 +67,11 @@ public class AuthController {
             return locked ? problem(423, "Account locked") : problem(401, "Invalid credentials");
         }
 
-        // Generate OTP
         String otp = otpService.generateAndStore(user.getId().toString());
         log.info("OTP generated for user {} (dev mode, OTP={})", user.getUsername(), otp);
 
-        // In production: send OTP via SMS pipeline
         // orchestrator.sendOtpSms(user.getMobileDecrypted(), otp);
 
-        // Issue pre-auth token
         String preAuthToken = tokenProvider.createPreAuthToken(user.getId(), user.getUsername());
         lockoutService.clearFailures(req.getUsername());
 
@@ -90,7 +83,6 @@ public class AuthController {
         return ResponseEntity.ok(body);
     }
 
-    // ── POST /auth/verify-otp ────────────────────────────────────
 
     @PostMapping("/verify-otp")
     public ResponseEntity<?> verifyOtp(@Valid @RequestBody OtpRequest req,
@@ -106,7 +98,6 @@ public class AuthController {
         var result = otpService.verify(userId.toString(), req.getOtp());
         return switch (result) {
             case VALID -> {
-                // Fetch user workspaces
                 var memberships = memberRepository.findByUserId(userId);
                 List<Map<String, Object>> workspaces = memberships.stream()
                         .map(m -> {
@@ -117,23 +108,19 @@ public class AuthController {
                             return ws;
                         }).toList();
 
-                // Use first workspace by default (user selects later)
                 UUID defaultWsId = memberships.isEmpty() ? null : memberships.get(0).getWorkspace().getId();
                 String defaultRole = memberships.isEmpty() ? null : memberships.get(0).getRole().getCode();
                 List<String> perms = memberships.isEmpty() ? List.of()
                         : memberships.get(0).getRole().getPermissionCodes();
 
-                // Issue tokens
                 String accessToken = tokenProvider.createAccessToken(userId, username,
                         defaultWsId, defaultRole, perms);
                 String refreshToken = tokenProvider.createRefreshToken(userId);
                 Claims refreshClaims = tokenProvider.parseToken(refreshToken);
                 String refreshJti = tokenProvider.getJti(refreshClaims);
 
-                // Create session
                 sessionService.createSession(userId, refreshJti);
 
-                // Set refresh token as HttpOnly cookie
                 Cookie cookie = new Cookie("refreshToken", refreshToken);
                 cookie.setHttpOnly(true);
                 cookie.setSecure(true);
@@ -155,7 +142,6 @@ public class AuthController {
         };
     }
 
-    // ── POST /auth/refresh ───────────────────────────────────────
 
     @PostMapping("/refresh")
     public ResponseEntity<?> refresh(HttpServletRequest request) {
@@ -176,7 +162,6 @@ public class AuthController {
 
         UUID userId = tokenProvider.getUserId(claims);
 
-        // Check idle timeout
         if (!sessionService.isSessionActive(userId)) {
             sessionService.revokeRefreshToken(refreshJti);
             return ResponseEntity.status(440)
@@ -184,7 +169,6 @@ public class AuthController {
                     .body(Map.of("type", "/errors/auth", "title", "Idle timeout", "status", 440));
         }
 
-        // Fetch current workspace membership
         var memberships = memberRepository.findByUserId(userId);
         UUID wsId = memberships.isEmpty() ? null : memberships.get(0).getWorkspace().getId();
         String role = memberships.isEmpty() ? null : memberships.get(0).getRole().getCode();
@@ -202,7 +186,6 @@ public class AuthController {
         ));
     }
 
-    // ── POST /auth/logout ────────────────────────────────────────
 
     @PostMapping("/logout")
     public ResponseEntity<?> logout(HttpServletRequest request, HttpServletResponse response) {
@@ -214,7 +197,6 @@ public class AuthController {
             }
         }
 
-        // Also deny the current access token if present
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             Claims accessClaims = tokenProvider.parseToken(authHeader.substring(7));
@@ -224,7 +206,6 @@ public class AuthController {
             }
         }
 
-        // Clear cookie
         Cookie cookie = new Cookie("refreshToken", "");
         cookie.setHttpOnly(true);
         cookie.setSecure(true);
@@ -235,7 +216,6 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("message", "Logged out"));
     }
 
-    // ── POST /auth/resend-otp ────────────────────────────────────
 
     @PostMapping("/resend-otp")
     public ResponseEntity<?> resendOtp(@Valid @RequestBody ResendOtpRequest req) {
@@ -256,7 +236,6 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("message", "OTP resent", "expiresIn", 180));
     }
 
-    // ── GET /auth/me ─────────────────────────────────────────────
 
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
@@ -298,7 +277,6 @@ public class AuthController {
         return ResponseEntity.ok(body);
     }
 
-    // ── POST /auth/switch-workspace ──────────────────────────────
 
     @PostMapping("/switch-workspace")
     @PreAuthorize("isAuthenticated()")
@@ -312,7 +290,6 @@ public class AuthController {
 
         var memberships = memberRepository.findByUserId(userId);
 
-        // Verify the user actually belongs to the target workspace
         var targetMembership = memberships.stream()
                 .filter(m -> m.getWorkspace().getId().equals(req.getWorkspaceId()))
                 .findFirst();
@@ -346,7 +323,6 @@ public class AuthController {
         return ResponseEntity.ok(body);
     }
 
-    // ── Helpers ──────────────────────────────────────────────────
 
     private String extractRefreshCookie(HttpServletRequest request) {
         if (request.getCookies() != null) {
@@ -374,7 +350,6 @@ public class AuthController {
                 .body(Map.of("type", "/errors/auth", "title", title, "status", status));
     }
 
-    // ── Request DTOs ─────────────────────────────────────────────
 
     @Data
     public static class LoginRequest {

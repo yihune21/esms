@@ -16,9 +16,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Campaign REST controller — LLD
- */
+
 @Slf4j
 @RestController
 @RequestMapping("/campaigns")

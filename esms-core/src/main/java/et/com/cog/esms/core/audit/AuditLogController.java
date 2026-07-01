@@ -76,10 +76,10 @@ public class AuditLogController {
         private final String actorUsername;
         private final String category;
         private final String severity;
-        private final String action; // Maps to "event" in UI
-        private final String entityType; // Maps to "resource" in UI
+        private final String action; 
+        private final String entityType; 
         private final UUID entityId;
         private final String ipAddress;
-        private final Instant createdAt; // Maps to "timestamp" in UI
+        private final Instant createdAt; 
     }
 }

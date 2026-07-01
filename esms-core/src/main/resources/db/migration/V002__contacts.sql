@@ -1,9 +1,3 @@
--- ===================================================================
--- V002: Contact & Address Book tables
--- Reference: LLD §4.3
--- ===================================================================
-
--- ── contact_upload (batch import lifecycle) ──────────────────────
 CREATE TABLE contact_upload (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     workspace_id    UUID         NOT NULL REFERENCES workspace(id),
@@ -26,7 +20,6 @@ CREATE TABLE contact_upload (
 
 CREATE INDEX idx_upload_ws ON contact_upload (workspace_id);
 
--- ── contact ──────────────────────────────────────────────────────
 CREATE TABLE contact (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     workspace_id    UUID         NOT NULL REFERENCES workspace(id),
@@ -46,10 +39,8 @@ CREATE INDEX idx_contact_ws_branch  ON contact (workspace_id, branch);
 CREATE INDEX idx_contact_phone      ON contact (phone_e164);
 CREATE INDEX idx_contact_name       ON contact USING gin (name gin_trgm_ops);
 
--- Trigram index requires extension
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
--- ── contact_group ────────────────────────────────────────────────
 CREATE TABLE contact_group (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     workspace_id    UUID         NOT NULL REFERENCES workspace(id),
@@ -62,14 +53,12 @@ CREATE TABLE contact_group (
 
 CREATE INDEX idx_cg_ws ON contact_group (workspace_id);
 
--- ── contact_group_member (M2M) ──────────────────────────────────
 CREATE TABLE contact_group_member (
     group_id        UUID NOT NULL REFERENCES contact_group(id) ON DELETE CASCADE,
     contact_id      UUID NOT NULL REFERENCES contact(id) ON DELETE CASCADE,
     PRIMARY KEY (group_id, contact_id)
 );
 
--- ── policy_record (Underwriting) ─────────────────────────────────
 CREATE TABLE policy_record (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     workspace_id    UUID         NOT NULL REFERENCES workspace(id),

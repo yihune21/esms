@@ -5,10 +5,7 @@ import lombok.*;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * Tracks async export jobs initiated via POST /reports/exports.
- * Reference: LLD §6.7
- */
+
 @Entity
 @Table(name = "report_export")
 @Getter @Setter
@@ -25,19 +22,15 @@ public class ReportExport {
     @Column(name = "requested_by")
     private UUID requestedBy;
 
-    /** XLSX or CSV */
     @Column(nullable = false, length = 10)
     private String format;
 
-    /** JSON-serialised filter criteria */
     @Column(name = "filter_json", columnDefinition = "TEXT")
     private String filterJson;
 
-    /** RUNNING | DONE | FAILED */
     @Column(nullable = false, length = 20)
     private String status;
 
-    /** Relative download path once the file is ready */
     @Column(name = "file_path")
     private String filePath;
 

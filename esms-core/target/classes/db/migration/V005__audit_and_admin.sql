@@ -1,8 +1,3 @@
--- ===================================================================
--- V005: Audit, Retention, and Carrier Prefix tables
--- Reference: LLD §4.7, §11, SDD §8
--- ===================================================================
-
 CREATE TABLE audit_log (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     workspace_id    UUID,

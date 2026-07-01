@@ -1,9 +1,3 @@
--- ===================================================================
--- V003: Campaign, Template, Approval, Schedule tables
--- Reference: LLD §4.4, §4.5, §7, §8
--- ===================================================================
-
--- ── template ─────────────────────────────────────────────────────
 CREATE TABLE template (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     workspace_id    UUID         NOT NULL REFERENCES workspace(id),
@@ -24,7 +18,6 @@ CREATE TABLE template (
 
 CREATE INDEX idx_template_ws ON template (workspace_id);
 
--- ── campaign ─────────────────────────────────────────────────────
 CREATE TABLE campaign (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     workspace_id    UUID         NOT NULL REFERENCES workspace(id),
@@ -51,7 +44,6 @@ CREATE INDEX idx_campaign_ws        ON campaign (workspace_id);
 CREATE INDEX idx_campaign_ws_status ON campaign (workspace_id, status);
 CREATE INDEX idx_campaign_schedule  ON campaign (scheduled_at) WHERE status = 'APPROVED';
 
--- ── allowed_transitions (reference table for trigger) ────────────
 CREATE TABLE allowed_transition (
     id              SERIAL PRIMARY KEY,
     workspace_kind  VARCHAR(30) NOT NULL,
@@ -60,7 +52,6 @@ CREATE TABLE allowed_transition (
     UNIQUE (workspace_kind, from_state, to_state)
 );
 
--- ── approval ─────────────────────────────────────────────────────
 CREATE TABLE approval (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     workspace_id    UUID         NOT NULL REFERENCES workspace(id),
@@ -77,7 +68,6 @@ CREATE TABLE approval (
 CREATE INDEX idx_approval_campaign ON approval (campaign_id);
 CREATE INDEX idx_approval_ws       ON approval (workspace_id);
 
--- ── schedule (Underwriting T-30/T-10) ────────────────────────────
 CREATE TABLE schedule (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     workspace_id    UUID         NOT NULL REFERENCES workspace(id),

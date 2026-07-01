@@ -6,10 +6,6 @@ import lombok.*;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * Per-message status event history.
- * Reference: LLD §4.6 – message_status_event table (V004)
- */
 @Entity
 @Table(name = "message_status_event")
 @Getter @Setter

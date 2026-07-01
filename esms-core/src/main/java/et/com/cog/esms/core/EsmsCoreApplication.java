@@ -5,12 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-/**
- * eSMS-Core — the main application (modular monolith).
- * Handles all user-facing and stateful operations:
- * identity, workspaces, contacts, templates, campaigns,
- * approvals, scheduling, reporting, and audit.
- */
+
 @SpringBootApplication
 @EnableScheduling
 @EnableAsync

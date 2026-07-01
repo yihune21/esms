@@ -11,11 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Tracks a batch Excel/CSV upload of contacts.
- * The upload lifecycle: DRAFT → MAPPED → COMMITTED or FAILED.
- * Reference: LLD §4.3 – contact_upload table (V002)
- */
+
 @Entity
 @Table(name = "contact_upload")
 @Getter @Setter
@@ -38,16 +34,13 @@ public class ContactUpload {
     @Column(name = "content_type", nullable = false)
     private String contentType;
 
-    /** DRAFT, MAPPED, COMMITTED, FAILED */
     @Column(nullable = false)
     private String status;
 
-    /** Detected column headers from the uploaded file */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "detected_cols", columnDefinition = "jsonb")
     private List<String> detectedCols;
 
-    /** Column mapping: Excel column → contact field */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, String> mapping;

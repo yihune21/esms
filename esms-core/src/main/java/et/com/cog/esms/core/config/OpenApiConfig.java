@@ -19,7 +19,6 @@ import org.springframework.context.annotation.Configuration;
  * UI  : http://localhost:8080/swagger-ui.html
  * Spec: http://localhost:8080/v3/api-docs
  *
- * Reference: LLD §15 (Configuration Reference), Integration Spec §4
  */
 @Configuration
 @OpenAPIDefinition(

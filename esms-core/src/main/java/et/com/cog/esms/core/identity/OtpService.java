@@ -7,11 +7,7 @@ import org.springframework.stereotype.Service;
 import java.security.SecureRandom;
 import java.time.Duration;
 
-/**
- * OTP generation, storage, and verification.
- * OTP is salted, hashed (SHA-256) and stored in Redis with TTL.
- * Reference: SDD §5, LLD §6.1
- */
+
 @Service
 @RequiredArgsConstructor
 public class OtpService {
@@ -26,29 +22,21 @@ public class OtpService {
     private static final Duration OTP_TTL            = Duration.ofMinutes(5);
     private static final Duration RESEND_COOLDOWN    = Duration.ofSeconds(30);
 
-    /**
-     * Generate a 6-digit OTP, store hash in Redis, return the plaintext.
-     */
+  
     public String generateAndStore(String userId) {
         String otp = generateNumericOtp(OTP_LENGTH);
-        // Store the OTP (in production: hash it)
         redis.opsForValue().set(OTP_KEY_PREFIX + userId, otp, OTP_TTL);
-        // Reset attempts counter
         redis.opsForValue().set(OTP_ATTEMPTS_PREFIX + userId, "0", OTP_TTL);
         return otp;
     }
 
-    /**
-     * Verify the OTP. Increments attempt counter on failure.
-     * Returns true if valid, false if invalid/expired/max-attempts.
-     */
+
     public OtpVerificationResult verify(String userId, String submittedOtp) {
         String storedOtp = redis.opsForValue().get(OTP_KEY_PREFIX + userId);
         if (storedOtp == null) {
             return OtpVerificationResult.EXPIRED;
         }
 
-        // Check attempts
         String attemptsStr = redis.opsForValue().get(OTP_ATTEMPTS_PREFIX + userId);
         int attempts = attemptsStr != null ? Integer.parseInt(attemptsStr) : 0;
         if (attempts >= MAX_ATTEMPTS) {
@@ -61,7 +49,6 @@ public class OtpService {
             return OtpVerificationResult.VALID;
         }
 
-        // Increment attempts
         redis.opsForValue().increment(OTP_ATTEMPTS_PREFIX + userId);
         return OtpVerificationResult.INVALID;
     }
@@ -72,7 +59,6 @@ public class OtpService {
     }
 
     public boolean canResend(String userId) {
-        // Simple cooldown check — could be enhanced with a resend counter
         return !Boolean.TRUE.equals(redis.hasKey("otp:cooldown:" + userId));
     }
 

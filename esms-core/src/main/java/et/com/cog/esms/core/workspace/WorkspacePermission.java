@@ -6,11 +6,7 @@ import lombok.*;
 import java.io.Serializable;
 import java.util.UUID;
 
-/**
- * M2M: workspace ↔ feature permission flags.
- * Each row represents a permission enabled for a workspace.
- * Matches the frontend workspace creation form checkboxes.
- */
+
 @Entity
 @Table(name = "workspace_permission")
 @IdClass(WorkspacePermissionId.class)

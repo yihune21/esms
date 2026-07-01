@@ -18,26 +18,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * Reminder REST controller.
- *
- * A "reminder" uploads an Excel file with insurance holders + expiry dates.
- * The system checks daily and instantly sends an SMS to any holder whose
- * insurance expires in exactly {@code triggerDays} days.
- *
- * This is distinct from a "scheduled" campaign (kind=SCHEDULED), which sends
- * a normal SMS batch at a specific future date/time.
- *
- * Endpoints:
- *   POST   /reminders              — create a reminder rule
- *   GET    /reminders              — list (optional ?status=ACTIVE|INACTIVE)
- *   GET    /reminders/{id}         — get a single reminder rule
- *   POST   /reminders/{id}/activate   — re-enable a paused rule
- *   POST   /reminders/{id}/deactivate — pause a rule
- *   POST   /reminders/{id}/trigger    — manually fire now (bypass daily schedule)
- *
- * Reference: LLD §4.5
- */
 @Slf4j
 @RestController
 @RequestMapping("/reminders")
@@ -46,22 +26,7 @@ public class ReminderController {
 
     private final ReminderService reminderService;
 
-    // ── Create ────────────────────────────────────────────────────────────────
-
-    /**
-     * Create a new reminder rule.
-     *
-     * Example request body:
-     * <pre>
-     * {
-     *   "name": "15-Day Policy Expiry Reminder",
-     *   "uploadId": "...",
-     *   "templateId": "...",
-     *   "triggerDays": 15,
-     *   "kind": "CUSTOM"
-     * }
-     * </pre>
-     */
+    
     @PostMapping
     @PreAuthorize("hasAuthority('SCHEDULE_MANAGE')")
     public ResponseEntity<?> create(@Valid @RequestBody CreateReminderRequest req) {
@@ -95,7 +60,6 @@ public class ReminderController {
         return ResponseEntity.ok(toDto(r));
     }
 
-    // ── List ──────────────────────────────────────────────────────────────────
 
     @GetMapping
     @PreAuthorize("hasAnyAuthority('SCHEDULE_VIEW','SCHEDULE_MANAGE')")
@@ -113,7 +77,6 @@ public class ReminderController {
         return ResponseEntity.ok(result);
     }
 
-    // ── Get by ID ─────────────────────────────────────────────────────────────
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('SCHEDULE_VIEW','SCHEDULE_MANAGE')")
@@ -126,7 +89,6 @@ public class ReminderController {
         return ResponseEntity.ok(toDto(reminderService.getById(wsId, id)));
     }
 
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     @PostMapping("/{id}/deactivate")
     @PreAuthorize("hasAuthority('SCHEDULE_MANAGE')")
@@ -150,10 +112,7 @@ public class ReminderController {
         return ResponseEntity.ok(toDto(reminderService.activate(wsId, id)));
     }
 
-    /**
-     * Manually fire this reminder immediately (for testing or ad-hoc sends).
-     * Finds all contacts in the upload whose expiry == today + triggerDays, then sends SMS.
-     */
+  
     @PostMapping("/{id}/trigger")
     @PreAuthorize("hasAuthority('SCHEDULE_MANAGE')")
     public ResponseEntity<?> triggerNow(@PathVariable UUID id) {
@@ -166,7 +125,6 @@ public class ReminderController {
         return ResponseEntity.accepted().build();
     }
 
-    // ── DTO mapping ───────────────────────────────────────────────────────────
 
     private ReminderDto toDto(Reminder r) {
         return new ReminderDto(
@@ -184,7 +142,6 @@ public class ReminderController {
         );
     }
 
-    // ── Inner DTOs ────────────────────────────────────────────────────────────
 
     @Data
     public static class CreateReminderRequest {
@@ -194,23 +151,17 @@ public class ReminderController {
 
         private UUID recipientGroupId;
 
-        /** ID of the Excel upload containing policy holders + expiry dates. */
         private UUID uploadId;
 
         private UUID templateId;
 
         private String customBody;
 
-        /**
-         * Days before expiry to trigger the reminder.
-         * E.g. 15 = "send SMS when 15 days remain before insurance expires".
-         * Must be at least 1.
-         */
+   
         @NotNull
         @Min(1)
         private Integer triggerDays;
 
-        /** T_MINUS_30 | T_MINUS_10 | CUSTOM */
         private String kind;
     }
 

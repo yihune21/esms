@@ -14,10 +14,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Reporting service — aggregates message delivery statistics per workspace.
- * Reference: LLD §6.7
- */
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -28,7 +25,6 @@ public class ReportService {
     private final ReportExportRepository exportRepo;
     private final ApplicationEventPublisher eventPublisher;
 
-    /** Summary totals + filtered rows for the delivery dashboard. */
     public DeliveryReport getDeliveryReport(UUID workspaceId,
                                             Instant from,
                                             Instant to,
@@ -66,7 +62,6 @@ public class ReportService {
         );
     }
 
-    /** Enqueue an async export job and return its tracking record. */
     @Transactional
     public ReportExport requestExport(UUID workspaceId, ReportExportRequest req) {
         ReportExport export = ReportExport.builder()
@@ -83,23 +78,16 @@ public class ReportService {
         return export;
     }
 
-    /** List all export jobs for a workspace, most-recent first. */
     public List<ReportExport> listExports(UUID workspaceId) {
         return exportRepo.findByWorkspaceIdOrderByCreatedAtDesc(workspaceId);
     }
 
-    /** Retrieve export job status (and stream file URL when DONE). */
     public ReportExport getExport(UUID exportId) {
         return exportRepo.findById(exportId)
                 .orElseThrow(() -> new IllegalArgumentException("Export not found: " + exportId));
     }
 
-    // ── Aggregation ──────────────────────────────────────────────────────────
-
-    /**
-     * Daily delivery trend for the workspace within a date range.
-     * Each point represents a (day, status, count) tuple.
-     */
+   
     public List<DailyTrendDto> getDailyTrend(UUID workspaceId, Instant from, Instant to) {
         return messageRepo.findDailyTrend(workspaceId, workspaceId == null, from, to)
                 .stream()
@@ -107,10 +95,7 @@ public class ReportService {
                 .toList();
     }
 
-    /**
-     * Per-campaign message summary for the workspace within a date range.
-     * Columns: campaignId, sent, delivered, failed, pending.
-     */
+
     public List<CampaignSummaryDto> getCampaignSummaries(UUID workspaceId, Instant from, Instant to) {
         return messageRepo.findCampaignSummaries(workspaceId, workspaceId == null, from, to)
                 .stream()
@@ -123,7 +108,6 @@ public class ReportService {
                 .toList();
     }
 
-    // ── Transfer objects ─────────────────────────────────────────────────────
 
     public record DailyTrendDto(String day, String status, long total) {}
 
@@ -135,7 +119,6 @@ public class ReportService {
             long   pending
     ) {}
 
-    /** Mask phone for privacy: keeps last 4 digits, e.g. ****6789 */
     private String maskPhone(String phone) {
         if (phone == null || phone.length() < 4) return "****";
         return "****" + phone.substring(phone.length() - 4);

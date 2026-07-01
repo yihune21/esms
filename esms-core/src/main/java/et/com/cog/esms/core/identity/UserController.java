@@ -15,10 +15,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * User management controller — CRUD and activate/deactivate.
- * No hard deletes; users are deactivated (status = DISABLED) instead.
- */
+
 @Slf4j
 @RestController
 @RequestMapping("/users")
@@ -29,7 +26,6 @@ public class UserController {
     private final PasswordEncoder passwordEncoder;
     private final WorkspaceMemberRepository memberRepo;
 
-    // ── GET /users ───────────────────────────────────────────────
     @GetMapping
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_MEMBER_ADD')")
     public ResponseEntity<List<UserDto>> list(
@@ -40,7 +36,6 @@ public class UserController {
         return ResponseEntity.ok(users.stream().map(this::toDto).collect(Collectors.toList()));
     }
 
-    // ── GET /users/{id} ──────────────────────────────────────────
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_MEMBER_ADD')")
     public ResponseEntity<UserDto> get(@PathVariable UUID id) {
@@ -49,7 +44,6 @@ public class UserController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── POST /users ──────────────────────────────────────────────
     @PostMapping
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_MEMBER_ADD')")
     public ResponseEntity<?> create(@Valid @RequestBody CreateUserRequest req) {
@@ -70,7 +64,6 @@ public class UserController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(userRepo.save(user)));
     }
 
-    // ── PATCH /users/{id} ────────────────────────────────────────
     @PatchMapping("/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_MEMBER_ADD')")
     public ResponseEntity<?> update(@PathVariable UUID id,
@@ -87,7 +80,6 @@ public class UserController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── POST /users/{id}/deactivate ──────────────────────────────
     @PostMapping("/{id}/deactivate")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_MEMBER_ADD')")
     public ResponseEntity<?> deactivate(@PathVariable UUID id) {
@@ -104,7 +96,6 @@ public class UserController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── POST /users/{id}/activate ────────────────────────────────
     @PostMapping("/{id}/activate")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_MEMBER_ADD')")
     public ResponseEntity<?> activate(@PathVariable UUID id) {
@@ -123,7 +114,6 @@ public class UserController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── GET /users/{id}/memberships ──────────────────────────────
     @GetMapping("/{id}/memberships")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_MEMBER_ADD')")
     public ResponseEntity<List<Map<String, Object>>> getMemberships(@PathVariable UUID id) {
@@ -140,10 +130,8 @@ public class UserController {
         return ResponseEntity.ok(result);
     }
 
-    // ── Helpers ──────────────────────────────────────────────────
 
     private UserDto toDto(AppUser u) {
-        // Inline memberships for the All Users grid
         List<MembershipDto> memberships = memberRepo.findByUserId(u.getId()).stream()
                 .map(m -> new MembershipDto(
                         m.getWorkspace().getId(),
@@ -154,7 +142,6 @@ public class UserController {
                 ))
                 .collect(Collectors.toList());
 
-        // Derive primary workspace info from first membership (if any)
         String primaryRole      = memberships.isEmpty() ? null : memberships.get(0).getRole();
         String primaryWorkspace = memberships.isEmpty() ? null : memberships.get(0).getWorkspaceName();
         String division         = memberships.isEmpty() ? null : memberships.get(0).getDivision();
@@ -166,7 +153,6 @@ public class UserController {
         );
     }
 
-    // ── DTOs ──────────────────────────────────────────────────
 
     @Data @AllArgsConstructor
     public static class UserDto {
@@ -178,7 +164,6 @@ public class UserController {
         private Instant lastLoginAt;
         private Instant createdAt;
         private Instant updatedAt;
-        // ── enriched ──
         private String  primaryRole;
         private String  primaryWorkspace;
         private String  division;

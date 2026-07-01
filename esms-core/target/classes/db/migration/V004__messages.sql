@@ -1,9 +1,3 @@
--- ===================================================================
--- V004: Message, Status Event, and Outbox tables
--- Reference: LLD §4.6, §10
--- ===================================================================
-
--- ── message ──────────────────────────────────────────────────────
 CREATE TABLE message (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     workspace_id    UUID         NOT NULL REFERENCES workspace(id),
@@ -32,7 +26,6 @@ CREATE INDEX idx_message_campaign   ON message (campaign_id);
 CREATE INDEX idx_message_status     ON message (workspace_id, status);
 CREATE INDEX idx_message_created    ON message (workspace_id, created_at);
 
--- ── message_status_event (history per message) ───────────────────
 CREATE TABLE message_status_event (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     message_id      UUID         NOT NULL REFERENCES message(id),
@@ -47,7 +40,6 @@ CREATE TABLE message_status_event (
 
 CREATE INDEX idx_mse_message ON message_status_event (message_id);
 
--- ── outbox_event (Transactional Outbox pattern) ──────────────────
 CREATE TABLE outbox_event (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     aggregate_type  VARCHAR(30)  NOT NULL DEFAULT 'message',

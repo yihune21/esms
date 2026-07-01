@@ -5,28 +5,18 @@ import lombok.Getter;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Thread-local holder for the current request's workspace context.
- * Populated by JwtAuthenticationFilter from the JWT workspace_id claim.
- * Used by tenant-aware repositories to scope all queries.
- *
- * The {@code effectivePermissions} list may be wider than what the JWT originally
- * contained if the user is an active delegate (Option B delegation injection).
- * Use {@code isDelegating()} to distinguish this at call sites if needed.
- */
+
 public final class WorkspaceContext {
 
     private static final ThreadLocal<WorkspaceInfo> CONTEXT = new ThreadLocal<>();
 
     private WorkspaceContext() {}
 
-    /** Called by JwtAuthenticationFilter after delegation injection. */
     public static void set(UUID workspaceId, UUID userId, String roleCode,
                            List<String> permissions, boolean delegating) {
         CONTEXT.set(new WorkspaceInfo(workspaceId, userId, roleCode, permissions, delegating));
     }
 
-    /** Backwards-compat overload — no delegation in effect. */
     public static void set(UUID workspaceId, UUID userId, String roleCode, List<String> permissions) {
         set(workspaceId, userId, roleCode, permissions, false);
     }
@@ -51,11 +41,7 @@ public final class WorkspaceContext {
                 && info.getPermissions().contains(permissionCode);
     }
 
-    /**
-     * Returns true if this request's authority set was augmented by an active
-     * Delegation record (i.e. the user is acting as someone's delegate).
-     * Useful for audit logging or conditional UI hints.
-     */
+
     public static boolean isDelegating() {
         WorkspaceInfo info = CONTEXT.get();
         return info != null && info.isDelegating();

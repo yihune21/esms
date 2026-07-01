@@ -12,10 +12,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Individual contact / address-book entry.
- * Reference: LLD §4.3 – contact table (V002)
- */
+
 @Entity
 @Table(name = "contact")
 @Getter @Setter

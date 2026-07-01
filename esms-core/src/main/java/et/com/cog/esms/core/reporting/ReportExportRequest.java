@@ -6,14 +6,10 @@ import lombok.Data;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * Request body for POST /reports/exports.
- * Reference: LLD §6.7
- */
+
 @Data
 public class ReportExportRequest {
 
-    /** "XLSX" or "CSV" */
     private String format = "XLSX";
 
     private UUID   campaignId;
@@ -22,7 +18,6 @@ public class ReportExportRequest {
     private Instant to;
     private String branch;
 
-    /** Serialise filter fields to JSON for storage in the export record. */
     public String toFilterJson() {
         try {
             return new ObjectMapper().writeValueAsString(this);

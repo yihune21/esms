@@ -10,10 +10,7 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * AMQP message published by eSMS-Sender onto sms.dlr.q,
- * consumed by eSMS-Core to update message status.
- */
+
 @Data
 @Builder
 @NoArgsConstructor

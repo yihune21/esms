@@ -16,10 +16,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Individual contact CRUD.
- * Reference: LLD §4.3
- */
+
 @Slf4j
 @RestController
 @RequestMapping("/contacts")
@@ -28,7 +25,6 @@ public class ContactController {
 
     private final ContactRepository contactRepo;
 
-    // ── GET /contacts ────────────────────────────────────────────
     @GetMapping
     @PreAuthorize("hasAuthority('CONTACT_VIEW')")
     public ResponseEntity<List<ContactDto>> list(
@@ -41,7 +37,6 @@ public class ContactController {
         return ResponseEntity.ok(result);
     }
 
-    // ── POST /contacts ───────────────────────────────────────────
     @PostMapping
     @PreAuthorize("hasAuthority('CONTACT_CREATE')")
     public ResponseEntity<?> create(@Valid @RequestBody CreateContactRequest req) {
@@ -65,7 +60,6 @@ public class ContactController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(contactRepo.save(contact)));
     }
 
-    // ── GET /contacts/{id} ───────────────────────────────────────
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('CONTACT_VIEW')")
     public ResponseEntity<ContactDto> get(@PathVariable UUID id) {
@@ -74,7 +68,6 @@ public class ContactController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── PATCH /contacts/{id} ─────────────────────────────────────
     @PatchMapping("/{id}")
     @PreAuthorize("hasAuthority('CONTACT_UPDATE')")
     public ResponseEntity<?> update(@PathVariable UUID id,
@@ -94,7 +87,6 @@ public class ContactController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── POST /contacts/{id}/deactivate ───────────────────────────
     @PostMapping("/{id}/deactivate")
     @PreAuthorize("hasAuthority('CONTACT_DELETE')")
     @Transactional
@@ -105,7 +97,6 @@ public class ContactController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    // ── POST /contacts/{id}/activate ─────────────────────────────
     @PostMapping("/{id}/activate")
     @PreAuthorize("hasAuthority('CONTACT_UPDATE')")
     @Transactional
@@ -116,7 +107,6 @@ public class ContactController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    // ── Helpers ──────────────────────────────────────────────────
 
     private ContactDto toDto(Contact c) {
         return new ContactDto(c.getId(), c.getWorkspaceId(), c.getName(),
@@ -124,7 +114,6 @@ public class ContactController {
                 c.isOptOut(), c.getStatus(), c.getCreatedAt());
     }
 
-    // ── DTOs ─────────────────────────────────────────────────────
 
     @Data @AllArgsConstructor
     public static class ContactDto {

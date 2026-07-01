@@ -14,10 +14,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-/**
- * Spring Security configuration — stateless JWT, no CSRF (API-only).
- * Public endpoints: auth, health/ready/metrics, Swagger.
- */
+
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -32,18 +29,13 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Public — authentication
                 .requestMatchers("/auth/login", "/auth/verify-otp",
                                  "/auth/refresh", "/auth/resend-otp").permitAll()
-                // Public — health/actuator
                 .requestMatchers("/health", "/ready", "/metrics",
                                  "/actuator/**").permitAll()
-                // Public — Swagger/OpenAPI
                 .requestMatchers("/swagger-ui/**", "/swagger-ui.html",
                                  "/v3/api-docs/**").permitAll()
-                // Public — OPTIONS for CORS preflight
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                // Everything else requires authentication
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

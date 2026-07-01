@@ -1,7 +1,3 @@
--- ===================================================================
--- V014: System Settings
--- ===================================================================
-
 CREATE TABLE IF NOT EXISTS system_setting (
     key VARCHAR(100) PRIMARY KEY,
     value VARCHAR(255) NOT NULL,

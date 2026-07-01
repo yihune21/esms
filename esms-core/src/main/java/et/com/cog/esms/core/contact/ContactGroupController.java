@@ -21,10 +21,6 @@ import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Contact-group CRUD + membership + upload history + export.
- * Reference: LLD §4.3
- */
 @Slf4j
 @RestController
 @RequestMapping("/groups")
@@ -38,7 +34,6 @@ public class ContactGroupController {
     private final ExcelUploadService          excelUploadService;
     private final UserRepository              userRepo;
 
-    // ── GET /groups ──────────────────────────────────────────────
     @GetMapping
     @PreAuthorize("hasAuthority('CONTACT_VIEW')")
     public ResponseEntity<List<GroupDto>> list(
@@ -50,7 +45,6 @@ public class ContactGroupController {
         return ResponseEntity.ok(groups.stream().map(this::toDto).collect(Collectors.toList()));
     }
 
-    // ── POST /groups ─────────────────────────────────────────────
     @PostMapping
     @PreAuthorize("hasAuthority('CONTACT_CREATE')")
     public ResponseEntity<?> create(@Valid @RequestBody CreateGroupRequest req) {
@@ -70,7 +64,6 @@ public class ContactGroupController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(groupRepo.save(group)));
     }
 
-    // ── GET /groups/{id} ─────────────────────────────────────────
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('CONTACT_VIEW')")
     public ResponseEntity<GroupDto> get(@PathVariable UUID id) {
@@ -79,7 +72,6 @@ public class ContactGroupController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── PATCH /groups/{id} ───────────────────────────────────────
     @PatchMapping("/{id}")
     @PreAuthorize("hasAuthority('CONTACT_UPDATE')")
     public ResponseEntity<?> update(@PathVariable UUID id,
@@ -93,7 +85,6 @@ public class ContactGroupController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── POST /groups/{id}/deactivate ─────────────────────────────
     @PostMapping("/{id}/deactivate")
     @PreAuthorize("hasAuthority('CONTACT_DELETE')")
     @Transactional
@@ -104,7 +95,6 @@ public class ContactGroupController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    // ── POST /groups/{id}/activate ───────────────────────────────
     @PostMapping("/{id}/activate")
     @PreAuthorize("hasAuthority('CONTACT_UPDATE')")
     @Transactional
@@ -115,7 +105,6 @@ public class ContactGroupController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    // ── GET /groups/{id}/members ─────────────────────────────────
     @GetMapping("/{id}/members")
     @PreAuthorize("hasAuthority('CONTACT_VIEW')")
     public ResponseEntity<List<Map<String, Object>>> members(@PathVariable UUID id) {
@@ -142,7 +131,6 @@ public class ContactGroupController {
         return ResponseEntity.ok(result);
     }
 
-    // ── POST /groups/{id}/members ────────────────────────────────
     @PostMapping("/{id}/members")
     @PreAuthorize("hasAuthority('CONTACT_UPDATE')")
     public ResponseEntity<?> addMember(@PathVariable UUID id,
@@ -167,7 +155,6 @@ public class ContactGroupController {
                 .body(Map.of("message", "Contact added to group"));
     }
 
-    // ── DELETE /groups/{id}/members/{contactId} ──────────────────
     @DeleteMapping("/{id}/members/{contactId}")
     @PreAuthorize("hasAuthority('CONTACT_UPDATE')")
     @Transactional
@@ -180,7 +167,6 @@ public class ContactGroupController {
         return ResponseEntity.noContent().build();
     }
 
-    // ── POST /groups/{id}/upload ─────────────────────────────────
     @PostMapping("/{id}/upload")
     @PreAuthorize("hasAuthority('CONTACT_UPLOAD')")
     public ResponseEntity<?> uploadContacts(@PathVariable UUID id,
@@ -192,7 +178,6 @@ public class ContactGroupController {
         UUID wsId   = WorkspaceContext.currentWorkspaceId();
         UUID userId = WorkspaceContext.currentUserId();
 
-        // Fix 1A: reject early for SUPER_ADMIN with no active workspace context
         if (wsId == null || userId == null) {
             return ResponseEntity.badRequest()
                     .body(Map.of("title", "No workspace context — select a workspace before uploading contacts"));
@@ -204,7 +189,6 @@ public class ContactGroupController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(upload);
         }
 
-        // Update group's known dynamic fields from this upload's headers
         if (upload.getMapping() != null && !upload.getMapping().isEmpty()) {
             groupRepo.findById(id).ifPresent(group -> {
                 List<String> currentFields = new ArrayList<>(group.getFields() != null ? group.getFields() : new ArrayList<>());
@@ -219,24 +203,17 @@ public class ContactGroupController {
         return ResponseEntity.ok(upload);
     }
 
-    // ── POST /uploads  (standalone — no group required) ──────────
-    /**
-     * Standalone recipients upload. Parses the file without attaching it to a group.
-     * Returns a ContactUpload record with an uploadId the campaign composer can reference.
-     */
     @PostMapping("/uploads")
     @PreAuthorize("hasAuthority('CONTACT_UPLOAD')")
     public ResponseEntity<?> standaloneUpload(@RequestParam("file") MultipartFile file) {
         UUID wsId   = WorkspaceContext.currentWorkspaceId();
         UUID userId = WorkspaceContext.currentUserId();
 
-        // Fix 1A: reject early for SUPER_ADMIN with no active workspace context
         if (wsId == null || userId == null) {
             return ResponseEntity.badRequest()
                     .body(Map.of("title", "No workspace context — select a workspace before uploading contacts"));
         }
 
-        // groupId = null → contacts created but not attached to any named group
         ContactUpload upload = excelUploadService.parseAndImport(wsId, userId, file, null);
 
         if ("FAILED".equals(upload.getStatus())) {
@@ -246,7 +223,6 @@ public class ContactGroupController {
         return ResponseEntity.status(HttpStatus.CREATED).body(upload);
     }
 
-    // ── GET /groups/{id}/uploads  (upload history) ───────────────
     @GetMapping("/{id}/uploads")
     @PreAuthorize("hasAuthority('CONTACT_VIEW')")
     public ResponseEntity<List<UploadHistoryDto>> uploadHistory(@PathVariable UUID id) {
@@ -270,7 +246,6 @@ public class ContactGroupController {
         return ResponseEntity.ok(history);
     }
 
-    // ── GET /groups/{id}/members/export  (CSV export) ────────────
     @GetMapping("/{id}/members/export")
     @PreAuthorize("hasAuthority('CONTACT_VIEW')")
     public ResponseEntity<byte[]> exportMembers(@PathVariable UUID id) {
@@ -278,7 +253,6 @@ public class ContactGroupController {
             return ResponseEntity.notFound().build();
         }
 
-        // Collect all contacts in this group
         List<Map<String, Object>> rows = memberRepo.findByGroupId(id).stream()
                 .map(m -> contactRepo.findById(m.getContactId()).orElse(null))
                 .filter(Objects::nonNull)
@@ -302,10 +276,8 @@ public class ContactGroupController {
                     .body("id,name,phoneE164,branch,optOut,status\n".getBytes());
         }
 
-        // Build CSV
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (PrintWriter pw = new PrintWriter(baos)) {
-            // Header row from the first record's key set
             Set<String> keys = rows.get(0).keySet();
             pw.println(String.join(",", keys));
 
@@ -333,14 +305,11 @@ public class ContactGroupController {
                 .body(csv);
     }
 
-    // ── Helpers ──────────────────────────────────────────────────
 
     private GroupDto toDto(ContactGroup g) {
-        // Count members and latest upload metadata for this group
         long memberCount  = memberRepo.countByGroupId(g.getId());
         long uploadCount  = uploadRepo.countByGroupId(g.getId());
 
-        // Latest upload info (for the GroupDto summary)
         ContactUpload latestUpload = uploadRepo.findByGroupIdOrderByCreatedAtDesc(g.getId())
                 .stream().findFirst().orElse(null);
 
@@ -359,7 +328,6 @@ public class ContactGroupController {
         );
     }
 
-    // ── DTOs ─────────────────────────────────────────────────────
 
     @Data @AllArgsConstructor
     public static class GroupDto {
@@ -370,7 +338,6 @@ public class ContactGroupController {
         private List<String> fields;
         private String      status;
         private Instant     createdAt;
-        // ── enriched fields ──
         private int         memberCount;
         private String      originalFileName;
         private Integer     recordCount;

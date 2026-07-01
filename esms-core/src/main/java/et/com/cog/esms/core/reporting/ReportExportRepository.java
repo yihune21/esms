@@ -6,10 +6,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Repository for report export job tracking records.
- * Reference: LLD §6.7
- */
+
 @Repository
 public interface ReportExportRepository extends JpaRepository<ReportExport, UUID> {
 

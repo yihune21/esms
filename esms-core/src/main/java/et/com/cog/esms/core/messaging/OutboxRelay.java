@@ -12,13 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 
-/**
- * Outbox Relay — polls unpublished outbox events and publishes to RabbitMQ.
- * Uses publisher confirms for at-least-once delivery.
- * Crash-safe: if the process dies after DB commit but before publish,
- * the next poll picks up the unpublished rows.
- * Reference: LLD §10.1
- */
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -28,9 +22,7 @@ public class OutboxRelay {
     private final RabbitTemplate rabbitTemplate;
     private final et.com.cog.esms.core.campaign.CampaignDispatchService campaignDispatchService;
 
-    /**
-     * Poll every 2 seconds for unpublished outbox events.
-     */
+   
     @Scheduled(fixedDelay = 2000)
     @Transactional
     public void relay() {
@@ -54,7 +46,6 @@ public class OutboxRelay {
                 outboxRepo.save(event);
             } catch (Exception e) {
                 log.error("Failed to publish/process outbox event {}: {}", event.getId(), e.getMessage());
-                // Will be retried on next poll
                 break;
             }
         }

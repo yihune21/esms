@@ -10,27 +10,12 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Reminder service.
- *
- * Responsibilities:
- *  - CRUD operations for reminder rules.
- *  - Daily @Scheduled polling job: for every ACTIVE reminder, publishes an OutboxEvent
- *    that instructs esms-sender to find all contacts in the linked upload whose insurance
- *    expiry date is exactly {@code triggerDays} days from today, then send each an SMS.
- *
- * A "reminder" is NOT a scheduled SMS. It is an instant SMS triggered automatically
- * when a date-based condition is met (e.g. "15 days before policy expiry").
- *
- * For sending an SMS at a specific future date, use a Campaign with kind=SCHEDULED.
- *
- * Reference: LLD §4.5
- */
+
+ 
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -40,15 +25,7 @@ public class ReminderService {
     private final OutboxEventRepository outboxRepo;
     private final ObjectMapper objectMapper;
 
-    // ── CRUD ──────────────────────────────────────────────────────────────────
 
-    /**
-     * Create a new reminder rule.
-     *
-     * @param triggerDays Number of days before insurance expiry to trigger the SMS.
-     *                    E.g. 15 means "send when exactly 15 days remain".
-     * @param kind        T_MINUS_30 | T_MINUS_10 | CUSTOM
-     */
     @Transactional
     public Reminder create(UUID workspaceId, String name, UUID recipientGroupId,
                            UUID uploadId, UUID templateId, String customBody,
@@ -72,9 +49,7 @@ public class ReminderService {
         return saved;
     }
 
-    /**
-     * Update an existing reminder rule.
-     */
+
     @Transactional
     public Reminder update(UUID workspaceId, UUID reminderId, Map<String, Object> updates) {
         Reminder r = getById(workspaceId, reminderId);
@@ -133,9 +108,7 @@ public class ReminderService {
         return saved;
     }
 
-    /**
-     * List reminder rules for a workspace, optionally filtered by status.
-     */
+
     @Transactional(readOnly = true)
     public List<Reminder> list(UUID workspaceId, String status) {
         if (status != null && !status.isBlank()) {
@@ -144,9 +117,7 @@ public class ReminderService {
         return reminderRepo.findByWorkspaceIdOrderByCreatedAtDesc(workspaceId);
     }
 
-    /**
-     * Retrieve a single reminder, verifying workspace ownership.
-     */
+  
     @Transactional(readOnly = true)
     public Reminder getById(UUID workspaceId, UUID reminderId) {
         Reminder r = reminderRepo.findById(reminderId)
@@ -157,9 +128,7 @@ public class ReminderService {
         return r;
     }
 
-    /**
-     * Deactivate a reminder rule — no more daily evaluations until re-activated.
-     */
+
     @Transactional
     public Reminder deactivate(UUID workspaceId, UUID reminderId) {
         Reminder r = getById(workspaceId, reminderId);
@@ -168,9 +137,7 @@ public class ReminderService {
         return reminderRepo.save(r);
     }
 
-    /**
-     * Activate a reminder rule — resumes daily evaluation.
-     */
+
     @Transactional
     public Reminder activate(UUID workspaceId, UUID reminderId) {
         Reminder r = getById(workspaceId, reminderId);
@@ -179,10 +146,7 @@ public class ReminderService {
         return reminderRepo.save(r);
     }
 
-    /**
-     * Manually trigger a reminder right now (bypasses the daily schedule).
-     * Useful for testing or one-off sends.
-     */
+   
     @Transactional
     public void triggerNow(UUID workspaceId, UUID reminderId) {
         Reminder r = getById(workspaceId, reminderId);
@@ -190,18 +154,7 @@ public class ReminderService {
         log.info("Reminder manually triggered: id={}", reminderId);
     }
 
-    // ── Daily polling job ─────────────────────────────────────────────────────
-
-    /**
-     * Runs once per day (configurable). For each ACTIVE reminder rule, publishes an
-     * OutboxEvent so esms-sender can:
-     *   1. Load the linked upload (Excel) rows.
-     *   2. Find contacts whose expiry date == today + triggerDays.
-     *   3. Send an SMS to each matching contact.
-     *
-     * The actual date-matching logic lives in esms-sender so that it has direct access
-     * to the uploaded file data and the message dispatch pipeline.
-     */
+   
     @Scheduled(cron = "${esms.scheduler.reminder-cron:0 0 8 * * *}")
     @Transactional
     public void processDueReminders() {
@@ -218,12 +171,9 @@ public class ReminderService {
         }
     }
 
-    // ── Internal ──────────────────────────────────────────────────────────────
 
     private void fireReminder(Reminder r) {
-        // Build payload for esms-sender.
-        // esms-sender will: load the upload, find rows where (expiryDate - today == triggerDays),
-        // and dispatch an SMS for each such contact using the specified template.
+       
         Map<String, Object> payload = new java.util.HashMap<>();
         payload.put("reminderId",  r.getId().toString());
         payload.put("workspaceId", r.getWorkspaceId().toString());

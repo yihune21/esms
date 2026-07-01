@@ -18,10 +18,7 @@ public interface CampaignRepository extends JpaRepository<Campaign, UUID> {
 
     List<Campaign> findByStatus(String status);
 
-    /**
-     * Finds APPROVED campaigns of kind=SCHEDULED whose scheduled_at is at or before now.
-     * Used by the scheduled-campaign poller to dispatch pending timed sends.
-     */
+   
     @Query("SELECT c FROM Campaign c WHERE c.kind = 'SCHEDULED' AND c.status = 'APPROVED' AND c.scheduledAt <= :now")
     List<Campaign> findDueScheduledCampaigns(@Param("now") Instant now);
 }

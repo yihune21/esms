@@ -5,14 +5,10 @@ import org.springframework.amqp.core.*;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * RabbitMQ topology configuration — declares exchanges, queues, and bindings.
- * Reference: ISD §11.1, HLD §11
- */
+
 @Configuration
 public class RabbitMqConfig {
 
-    // ── Exchanges ────────────────────────────────────────────────
 
     @Bean
     public TopicExchange smsExchange() {
@@ -24,7 +20,6 @@ public class RabbitMqConfig {
         return new DirectExchange(QueueConstants.EXCHANGE_DLX, true, false);
     }
 
-    // ── Queues ───────────────────────────────────────────────────
 
     @Bean
     public Queue smsSendQueue() {
@@ -52,7 +47,6 @@ public class RabbitMqConfig {
                 .build();
     }
 
-    // ── Bindings ─────────────────────────────────────────────────
 
     @Bean
     public Binding sendBinding() {

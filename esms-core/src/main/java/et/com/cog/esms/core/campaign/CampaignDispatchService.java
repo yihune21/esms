@@ -83,7 +83,6 @@ public class CampaignDispatchService {
     private void dispatchCampaign(Campaign campaign) throws Exception {
         log.info("Dispatching campaign: id={}, name={}", campaign.getId(), campaign.getName());
 
-        // 1. Resolve body template & encoding
         Template template = null;
         if (campaign.getTemplateId() != null) {
             template = templateRepo.findById(campaign.getTemplateId()).orElse(null);
@@ -95,16 +94,13 @@ public class CampaignDispatchService {
 
         String encoding = (template != null) ? template.getEncoding() : "GSM7";
 
-        // 2. Resolve Workspace & Sender Mask
         Workspace workspace = workspaceRepo.findById(campaign.getWorkspaceId()).orElse(null);
         String senderMask = (template != null && template.getSender() != null)
                 ? template.getSender()
                 : (workspace != null ? workspace.getSenderMask() : "NIB");
 
-        // 3. Resolve all unique recipients
         Map<String, RecipientInfo> recipients = new HashMap<>();
 
-        // Source A: Campaign's Contact Group
         if (campaign.getRecipientGroupId() != null) {
             List<Contact> groupContacts = contactRepo.findActiveByGroupId(campaign.getRecipientGroupId());
             for (Contact c : groupContacts) {
@@ -114,7 +110,6 @@ public class CampaignDispatchService {
             }
         }
 
-        // Source B: Campaign's Upload ID
         if (campaign.getUploadId() != null) {
             List<Contact> uploadContacts = contactRepo.findByUploadIdAndStatus(campaign.getUploadId(), "ACTIVE");
             for (Contact c : uploadContacts) {
@@ -124,7 +119,6 @@ public class CampaignDispatchService {
             }
         }
 
-        // Source C: Template's Contact Group & Inline Template Recipients (if template is used)
         if (template != null) {
             if (template.getRecipientGroupId() != null) {
                 List<Contact> templateGroupContacts = contactRepo.findActiveByGroupId(template.getRecipientGroupId());
@@ -142,10 +136,8 @@ public class CampaignDispatchService {
             }
         }
 
-        // 4. Resolve carriers
         List<CarrierPrefix> prefixes = carrierPrefixRepo.findAll();
 
-        // 5. Generate Messages & SendCommands
         int recipientCount = 0;
         for (RecipientInfo recipient : recipients.values()) {
             String resolvedBody = resolveMessageBody(bodyTemplate, recipient.getName(), recipient.getPhone(), recipient.getExtra());
@@ -190,7 +182,6 @@ public class CampaignDispatchService {
             recipientCount++;
         }
 
-        // 6. Update Campaign stats and transition status to COMPLETED (since all messages are queued)
         campaign.setRecipientCount(recipientCount);
         campaign.setStatus("QUEUED");
         campaign.setCompletedAt(Instant.now());
@@ -202,7 +193,6 @@ public class CampaignDispatchService {
     private void dispatchReminder(Reminder reminder) throws Exception {
         log.info("Evaluating reminder rule: id={}, name={}, triggerDays={}", reminder.getId(), reminder.getName(), reminder.getTriggerDays());
 
-        // 1. Resolve body template & encoding
         Template template = templateRepo.findById(reminder.getTemplateId())
                 .orElseThrow(() -> new IllegalArgumentException("Template not found for reminder: " + reminder.getTemplateId()));
 
@@ -212,14 +202,11 @@ public class CampaignDispatchService {
 
         String encoding = template.getEncoding();
 
-        // 2. Resolve Workspace & Sender Mask
         Workspace workspace = workspaceRepo.findById(reminder.getWorkspaceId()).orElse(null);
         String senderMask = (template.getSender() != null) ? template.getSender() : (workspace != null ? workspace.getSenderMask() : "NIB");
 
-        // 3. Resolve and filter contacts by expiry date matching triggerDays
         Map<String, RecipientInfo> recipients = new HashMap<>();
 
-        // Source A: Reminder's Contact Group
         if (reminder.getRecipientGroupId() != null) {
             List<Contact> groupContacts = contactRepo.findActiveByGroupId(reminder.getRecipientGroupId());
             for (Contact c : groupContacts) {
@@ -229,7 +216,6 @@ public class CampaignDispatchService {
             }
         }
 
-        // Source B: Reminder's Upload ID
         if (reminder.getUploadId() != null) {
             List<Contact> uploadContacts = contactRepo.findByUploadIdAndStatus(reminder.getUploadId(), "ACTIVE");
             for (Contact c : uploadContacts) {
@@ -239,10 +225,8 @@ public class CampaignDispatchService {
             }
         }
 
-        // 4. Resolve carriers
         List<CarrierPrefix> prefixes = carrierPrefixRepo.findAll();
 
-        // 5. Generate Messages & SendCommands
         int recipientCount = 0;
         for (RecipientInfo recipient : recipients.values()) {
             String resolvedBody = resolveMessageBody(bodyTemplate, recipient.getName(), recipient.getPhone(), recipient.getExtra());
@@ -285,7 +269,6 @@ public class CampaignDispatchService {
             recipientCount++;
         }
 
-        // 6. Update Reminder fired_at timestamp
         reminder.setFiredAt(Instant.now());
         reminderRepo.save(reminder);
 

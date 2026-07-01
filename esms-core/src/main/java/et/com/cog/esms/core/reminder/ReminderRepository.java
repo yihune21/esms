@@ -14,9 +14,7 @@ public interface ReminderRepository extends JpaRepository<Reminder, UUID> {
 
     List<Reminder> findByWorkspaceIdAndStatusOrderByCreatedAtDesc(UUID workspaceId, String status);
 
-    /**
-     * Fetches all ACTIVE reminder rules to be evaluated by the daily poller.
-     */
+
     @Query("SELECT r FROM Reminder r WHERE r.status = 'ACTIVE'")
     List<Reminder> findActiveReminders();
 }

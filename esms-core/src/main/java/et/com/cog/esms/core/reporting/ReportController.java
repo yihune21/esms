@@ -26,15 +26,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Reporting REST controller.
- *
- * GET  /reports/messages  — delivery dashboard with totals + filtered rows
- * POST /reports/exports   — request an async XLSX/CSV export
- * GET  /reports/exports/{id} — poll export status / retrieve file
- *
- * Reference: LLD §6.7
- */
+
 @RestController
 @RequestMapping("/reports")
 @RequiredArgsConstructor
@@ -48,18 +40,7 @@ public class ReportController {
     private final et.com.cog.esms.core.messaging.MessageRepository messageRepo;
     private final WorkspaceMemberRepository  memberRepo;
 
-    /**
-     * Delivery dashboard.
-     *
-     * Query params:
-     *   from        – ISO-8601 start timestamp (inclusive)
-     *   to          – ISO-8601 end timestamp   (inclusive)
-     *   campaignId  – filter by campaign UUID
-     *   branch      – filter by branch tag
-     *   status      – PENDING | QUEUED | SENT | DELIVERED | FAILED | EXPIRED
-     *   page        – 0-based page index (default 0)
-     *   size        – page size (default 20)
-     */
+
     @GetMapping("/messages")
     @PreAuthorize("hasAnyAuthority('REPORT_VIEW','REPORT_EXPORT')")
     public ResponseEntity<DeliveryReport> getMessages(
@@ -81,9 +62,7 @@ public class ReportController {
         return ResponseEntity.ok(report);
     }
 
-    /**
-     * List all export jobs for the current workspace.
-     */
+
     @GetMapping("/exports")
     @PreAuthorize("hasAuthority('REPORT_EXPORT')")
     public ResponseEntity<List<ExportStatusResponse>> listExports() {
@@ -96,11 +75,7 @@ public class ReportController {
         return ResponseEntity.ok(result);
     }
 
-    /**
-     * Request an async export job.
-     *
-     * Body: { "filter": { "from": "…", "to": "…", "campaignId": "…" }, "format": "XLSX" }
-     */
+
     @PostMapping("/exports")
     @PreAuthorize("hasAuthority('REPORT_EXPORT')")
     public ResponseEntity<ExportResponse> requestExport(
@@ -114,10 +89,7 @@ public class ReportController {
                 .body(new ExportResponse(export.getId(), export.getStatus()));
     }
 
-    /**
-     * Poll export job status.
-     * When status == DONE the response includes a filePath for download.
-     */
+ 
     @GetMapping("/exports/{id}")
     @PreAuthorize("hasAuthority('REPORT_EXPORT')")
     public ResponseEntity<?> getExport(@PathVariable UUID id) {
@@ -145,18 +117,7 @@ public class ReportController {
         ));
     }
 
-    // ── Aggregation endpoints ──────────────────────────────────────────────
-
-    /**
-     * Daily delivery trend.
-     *
-     * Returns an array of { day, status, total } points for the given date range.
-     * Each (day × status) combination is one entry.
-     *
-     * Query params:
-     *   from – ISO-8601 start timestamp (optional)
-     *   to   – ISO-8601 end timestamp   (optional)
-     */
+   
     @GetMapping("/aggregations/daily")
     @PreAuthorize("hasAnyAuthority('REPORT_VIEW','REPORT_EXPORT')")
     public ResponseEntity<List<DailyTrendDto>> getDailyTrend(
@@ -168,15 +129,7 @@ public class ReportController {
         return ResponseEntity.ok(reportService.getDailyTrend(wsId, from, to));
     }
 
-    /**
-     * Per-campaign message summary.
-     *
-     * Returns one row per campaign with sent / delivered / failed / pending counts.
-     *
-     * Query params:
-     *   from – ISO-8601 start timestamp (optional)
-     *   to   – ISO-8601 end timestamp   (optional)
-     */
+    
     @GetMapping("/aggregations/campaigns")
     @PreAuthorize("hasAnyAuthority('REPORT_VIEW','REPORT_EXPORT')")
     public ResponseEntity<List<CampaignSummaryDto>> getCampaignSummaries(
@@ -188,20 +141,7 @@ public class ReportController {
         return ResponseEntity.ok(reportService.getCampaignSummaries(wsId, from, to));
     }
 
-    // ── Dashboard summary ──────────────────────────────────────────────
-
-    /**
-     * Single dashboard-summary endpoint.
-     * For SUPER_ADMIN with no workspaceId: returns platform-wide aggregates.
-     * For workspace users (or SUPER_ADMIN with ?workspaceId=): returns per-workspace totals.
-     *
-     * Response shape:
-     * {
-     *   totalMessages, sentMessages, deliveredMessages, failedMessages,
-     *   deliveryRatePct, totalCampaigns, activeWorkspaces, totalUsers,
-     *   activeUsers30d
-     * }
-     */
+    
     @GetMapping("/dashboard/summary")
     @PreAuthorize("hasAnyAuthority('REPORT_VIEW','REPORT_EXPORT')")
     public ResponseEntity<Map<String, Object>> getDashboardSummary(
@@ -251,14 +191,7 @@ public class ReportController {
         return ResponseEntity.ok(summary);
     }
 
-    // ── Users & Access activity analytics ─────────────────────────────
 
-    /**
-     * Action frequency chart data for Reports → Users &amp; Access tab.
-     * Returns [ { action: "LOGIN", total: 42 }, … ] sorted by frequency.
-     *
-     * Optional: ?workspaceId= for SUPER_ADMIN cross-workspace, ?days=30 for time window.
-     */
     @GetMapping("/users-activity")
     @PreAuthorize("hasAnyAuthority('REPORT_VIEW','REPORT_EXPORT')")
     public ResponseEntity<List<Map<String, Object>>> getUsersActivity(
@@ -281,7 +214,6 @@ public class ReportController {
         return ResponseEntity.ok(result);
     }
 
-    // ── inline DTOs ────────────────────────────────────────────────────────
 
     private UUID resolveWorkspace(UUID overrideWsId) {
         boolean isSuperAdmin = org.springframework.security.core.context.SecurityContextHolder.getContext()

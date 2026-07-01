@@ -12,10 +12,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Named group / segment of contacts, used as campaign recipient lists.
- * Reference: LLD §4.3 – contact_group table (V002)
- */
 @Entity
 @Table(name = "contact_group")
 @Getter @Setter
@@ -34,7 +30,6 @@ public class ContactGroup {
 
     private String description;
 
-    /** Dynamic field definitions (column headers from Excel upload). */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     @Builder.Default

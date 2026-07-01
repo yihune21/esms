@@ -5,10 +5,7 @@ import lombok.*;
 
 import java.util.UUID;
 
-/**
- * M2M: contact_group ↔ contact membership.
- * Reference: LLD §4.3 – contact_group_member table (V002)
- */
+
 @Entity
 @Table(name = "contact_group_member")
 @IdClass(ContactGroupMemberId.class)

@@ -1,8 +1,3 @@
--- ===================================================================
--- V008: Report Export table
--- Reference: LLD §6.7
--- ===================================================================
-
 CREATE TABLE report_export (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     workspace_id    UUID         NOT NULL REFERENCES workspace(id),

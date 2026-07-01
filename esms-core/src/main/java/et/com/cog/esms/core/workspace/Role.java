@@ -42,9 +42,7 @@ public class Role {
     @Builder.Default
     private List<Permission> permissions = new ArrayList<>();
 
-    /**
-     * Convenience method to extract permission codes.
-     */
+ 
     public List<String> getPermissionCodes() {
         return permissions.stream()
                 .map(Permission::getCode)

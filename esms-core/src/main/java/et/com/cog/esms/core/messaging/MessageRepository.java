@@ -13,10 +13,8 @@ import java.util.UUID;
 @Repository
 public interface MessageRepository extends JpaRepository<Message, UUID> {
 
-    // ── Projection interfaces for aggregation results ─────────────────────
 
     interface DailyTrendPoint {
-        /** Truncated date string, e.g. "2024-06-15" (cast to VARCHAR in query). */
         String getDay();
         String getStatus();
         long   getTotal();
@@ -43,20 +41,11 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
     @Query("SELECT COUNT(DISTINCT m.workspaceId) FROM Message m")
     long countDistinctWorkspaces();
 
-    // ── Reporting queries ─────────────────────────────────────────────────
 
     @Query("SELECT COUNT(m) FROM Message m WHERE (:wsId IS NULL OR m.workspaceId = :wsId) AND m.status = :status")
     long countByWorkspaceIdAndStatus(@Param("wsId") UUID workspaceId, @Param("status") String status);
 
-    /**
-     * Flexible filtered query for the delivery dashboard.
-     * All filter params are optional (null = ignored).
-     */
-    /**
-     * Flexible filtered query for the delivery dashboard.
-     * All filter params are optional (null = ignored).
-     * Branch is matched via an EXISTS sub-select on the Contact entity.
-     */
+    
     @Query("""
         SELECT m FROM Message m
         WHERE (:wsId IS NULL OR m.workspaceId = :wsId)
@@ -99,15 +88,7 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
             @Param("branch")     String  branch
     );
 
-    // ── Aggregation queries ───────────────────────────────────────────────────
-
-    /**
-     * Daily delivery trend: for each (day, status) pair within the date range
-     * returns the count of messages. Used by GET /reports/aggregations/daily.
-     *
-     * allWorkspaces=true (super admin) → no workspace filter.
-     * CAST(... AS date) truncates the timestamp to calendar-day precision in PostgreSQL.
-     */
+    
     @Query(value = """
         SELECT CAST(m.created_at AS date) AS day,
                m.status                  AS status,
@@ -126,13 +107,7 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
             @Param("to")            Instant to
     );
 
-    /**
-     * Per-campaign summary: sent, delivered, failed, and pending counts
-     * for every campaign in the workspace within the date range.
-     * Used by GET /reports/aggregations/campaigns.
-     *
-     * allWorkspaces=true (super admin) → no workspace filter.
-     */
+   
     @Query(value = """
         SELECT m.campaign_id                                             AS campaignId,
                COUNT(*) FILTER (WHERE m.status = 'SENT')                AS sent,

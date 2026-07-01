@@ -21,7 +21,7 @@ public class CarrierPrefix {
     private String prefix;
 
     @Column(nullable = false)
-    private String carrier; // ETHIO_TELECOM or SAFARICOM
+    private String carrier; 
 
     @Column(nullable = false)
     private boolean active;

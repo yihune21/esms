@@ -12,13 +12,7 @@ import java.io.InputStream;
 import java.time.Instant;
 import java.util.*;
 
-/**
- * Parses Excel (.xlsx/.xls) files and imports contacts with dynamic fields.
- *
- * The first row is treated as headers — these become the dynamic field names.
- * Only "name" (or "Name") and "phone" / "phone_number" / "phoneE164" are required columns.
- * All other columns are stored in the contact's {@code extra} JSONB map.
- */
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -28,15 +22,10 @@ public class ExcelUploadService {
     private final ContactUploadRepository uploadRepo;
     private final ContactGroupMemberRepository memberRepo;
 
-    /**
-     * Parse an Excel file and create contacts, optionally adding them to a group.
-     *
-     * @return the ContactUpload tracking record
-     */
+
     @Transactional
     public ContactUpload parseAndImport(UUID workspaceId, UUID uploadedBy,
                                          MultipartFile file, UUID groupId) {
-        // Create upload tracking record
         ContactUpload upload = ContactUpload.builder()
                 .workspaceId(workspaceId)
                 .originalName(file.getOriginalFilename())
@@ -59,7 +48,6 @@ public class ExcelUploadService {
                 return uploadRepo.save(upload);
             }
 
-            // Parse header row
             Row headerRow = sheet.getRow(0);
             List<String> headers = new ArrayList<>();
             for (Cell cell : headerRow) {
@@ -67,7 +55,6 @@ public class ExcelUploadService {
             }
             upload.setDetectedCols(headers);
 
-            // Identify required column indices
             int nameIdx = findColumnIndex(headers, "name", "Name", "NAME", "Full Name", "full_name");
             int phoneIdx = findColumnIndex(headers, "phone", "Phone", "PHONE", "phone_number",
                     "Phone Number", "phoneE164", "phone_e164", "Mobile", "mobile", "MOBILE");
@@ -80,7 +67,6 @@ public class ExcelUploadService {
                 return uploadRepo.save(upload);
             }
 
-            // Build column mapping
             Map<String, String> mapping = new LinkedHashMap<>();
             mapping.put(headers.get(nameIdx), "name");
             mapping.put(headers.get(phoneIdx), "phone_e164");
@@ -91,13 +77,11 @@ public class ExcelUploadService {
             }
             upload.setMapping(mapping);
 
-            // Parse data rows
             int totalRows = 0;
             int importedCount = 0;
             int duplicateCount = 0;
             int errorCount = 0;
             List<Map<String, Object>> errors = new ArrayList<>();
-            // Track phones already seen in this upload batch (Fix 1B: in-batch dedup)
             Set<String> seenPhonesInBatch = new LinkedHashSet<>();
 
             for (int rowIdx = 1; rowIdx <= sheet.getLastRowNum(); rowIdx++) {
@@ -115,11 +99,9 @@ public class ExcelUploadService {
                         continue;
                     }
 
-                    // Check for duplicates: first within this batch, then in the DB
                     if (seenPhonesInBatch.contains(phone)
                             || contactRepo.existsByWorkspaceIdAndPhoneE164(workspaceId, phone)) {
                         duplicateCount++;
-                        // Still add to group if the contact already exists in the DB
                         if (groupId != null && !seenPhonesInBatch.contains(phone)) {
                             contactRepo.findByWorkspaceIdAndPhoneE164(workspaceId, phone)
                                     .ifPresent(existing -> {
@@ -135,7 +117,6 @@ public class ExcelUploadService {
                     }
                     seenPhonesInBatch.add(phone);
 
-                    // Build extra fields map
                     Map<String, String> extra = new LinkedHashMap<>();
                     for (int colIdx = 0; colIdx < headers.size(); colIdx++) {
                         if (colIdx != nameIdx && colIdx != phoneIdx) {
@@ -157,7 +138,6 @@ public class ExcelUploadService {
                             .build();
                     contact = contactRepo.save(contact);
 
-                    // Add to group if specified
                     if (groupId != null) {
                         memberRepo.save(ContactGroupMember.builder()
                                 .groupId(groupId)
@@ -191,7 +171,6 @@ public class ExcelUploadService {
         }
     }
 
-    // ── Internal helpers ─────────────────────────────────────────
 
     private int findColumnIndex(List<String> headers, String... candidates) {
         for (int i = 0; i < headers.size(); i++) {
@@ -212,7 +191,6 @@ public class ExcelUploadService {
                 if (DateUtil.isCellDateFormatted(cell)) {
                     yield cell.getLocalDateTimeCellValue().toString();
                 }
-                // Avoid scientific notation for phone numbers
                 double val = cell.getNumericCellValue();
                 if (val == Math.floor(val) && !Double.isInfinite(val)) {
                     yield String.valueOf((long) val);
@@ -226,13 +204,10 @@ public class ExcelUploadService {
     }
 
     private String normalizePhone(String phone) {
-        // Remove spaces, dashes, etc.
         phone = phone.replaceAll("[\\s\\-().]", "");
-        // Add Ethiopian country code if it starts with 09 or 07
         if (phone.startsWith("09") || phone.startsWith("07")) {
             phone = "+251" + phone.substring(1);
         }
-        // Add + if missing
         if (phone.startsWith("251") && !phone.startsWith("+")) {
             phone = "+" + phone;
         }

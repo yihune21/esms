@@ -13,9 +13,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * REST controller for retrieving available roles.
- */
+
 @RestController
 @RequestMapping("/roles")
 @RequiredArgsConstructor

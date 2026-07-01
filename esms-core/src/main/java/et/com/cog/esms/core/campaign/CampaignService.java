@@ -17,11 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.*;
 
-/**
- * Campaign service — handles lifecycle and approval state machine.
- * Enforces: allowed transitions, approver ≠ drafter, workspace kind rules.
- * Reference: LLD §7
- */
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -34,9 +30,7 @@ public class CampaignService {
     private final ObjectMapper objectMapper;
     private final WorkspacePermissionRepository permissionRepo;
 
-    /** Allowed transitions per workspace kind — mirrors the DB trigger. */
     private static final Map<String, Set<String>> TRANSITIONS = Map.ofEntries(
-        // Standard 1-tier
         Map.entry("UNDERWRITING:DRAFT",            Set.of("PENDING_APPROVAL")),
         Map.entry("CLAIMS:DRAFT",                  Set.of("PENDING_APPROVAL")),
         Map.entry("MARKETING:DRAFT",               Set.of("PENDING_APPROVAL")),
@@ -45,17 +39,17 @@ public class CampaignService {
         Map.entry("CLAIMS:PENDING_APPROVAL",        Set.of("APPROVED", "DRAFT")),
         Map.entry("MARKETING:PENDING_APPROVAL",     Set.of("APPROVED", "DRAFT")),
         Map.entry("GENERIC:PENDING_APPROVAL",       Set.of("APPROVED", "DRAFT")),
-        // Delegation 2-tier (non-Finance workspaces with DELEGATION permission)
+
         Map.entry("DELEGATION:DRAFT",              Set.of("PENDING_HEAD")),
         Map.entry("DELEGATION:PENDING_HEAD",       Set.of("PENDING_CEO", "DRAFT")),
         Map.entry("DELEGATION:PENDING_CEO",        Set.of("APPROVED", "DRAFT")),
         Map.entry("DELEGATION:APPROVED",           Set.of("CANCELLED")),
         Map.entry("DELEGATION:QUEUED",             Set.of("CANCELLED")),
-        // Finance 2-tier
+
         Map.entry("FINANCE:DRAFT",           Set.of("PENDING_HEAD")),
         Map.entry("FINANCE:PENDING_HEAD",    Set.of("PENDING_CEO", "DRAFT")),
         Map.entry("FINANCE:PENDING_CEO",     Set.of("APPROVED", "DRAFT")),
-        // Cancellation — any workspace kind, from APPROVED or QUEUED
+
         Map.entry("UNDERWRITING:APPROVED",   Set.of("CANCELLED")),
         Map.entry("UNDERWRITING:QUEUED",     Set.of("CANCELLED")),
         Map.entry("CLAIMS:APPROVED",         Set.of("CANCELLED")),
@@ -72,7 +66,6 @@ public class CampaignService {
     public Campaign create(UUID workspaceId, String name, String kind,
                            UUID templateId, UUID recipientGroupId, UUID uploadId,
                            String customBody, Instant scheduledAt) {
-        // Fix #5: scheduled campaigns must have a future scheduledAt
         if ("SCHEDULED".equals(kind)) {
             if (scheduledAt == null) {
                 throw new IllegalArgumentException("scheduledAt is required for SCHEDULED campaigns");
@@ -130,8 +123,7 @@ public class CampaignService {
         boolean hasDelegation = permissionRepo.existsByWorkspaceIdAndPermissionCode(ws.getId(), "DELEGATION");
         UUID actorId = WorkspaceContext.currentUserId();
 
-        // Fix #1: DEPT_HEAD and SUPER_ADMIN may approve their own campaign;
-        // plain OPERATOR/other roles may not.
+        
         boolean isSuperAdmin = org.springframework.security.core.context.SecurityContextHolder
                 .getContext().getAuthentication().getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"));
@@ -143,7 +135,6 @@ public class CampaignService {
             throw new IllegalStateException("The drafter cannot approve their own campaign");
         }
 
-        // Determine target state
         String targetState;
         if ("PENDING_HEAD".equals(c.getStatus())) {
             targetState = ("FINANCE".equals(ws.getKind()) || hasDelegation) ? "PENDING_CEO" : "APPROVED";
@@ -206,10 +197,7 @@ public class CampaignService {
         return campaignRepo.save(c);
     }
 
-    /**
-     * Update a campaign that is still in DRAFT status.
-     * Any subset of fields may be changed; null values leave the field unchanged.
-     */
+    
     @Transactional
     public Campaign update(UUID campaignId, String name, String kind,
                            UUID templateId, UUID recipientGroupId, UUID uploadId,
@@ -234,10 +222,7 @@ public class CampaignService {
         return campaignRepo.save(c);
     }
 
-    /**
-     * Cancel an APPROVED or QUEUED campaign.
-     * Records an audit trail entry and transitions status to CANCELLED.
-     */
+   
     @Transactional
     public Campaign cancel(UUID campaignId, String note) {
         Campaign c = campaignRepo.findById(campaignId)
@@ -256,16 +241,7 @@ public class CampaignService {
         return campaignRepo.save(c);
     }
 
-    // ── Scheduled campaign poller ─────────────────────────────────
-
-    /**
-     * Runs every minute. Finds all APPROVED campaigns of kind=SCHEDULED whose
-     * {@code scheduled_at} timestamp has passed, transitions them to QUEUED,
-     * and publishes an OutboxEvent so esms-sender dispatches the messages.
-     *
-     * This is the "send an SMS at a specific future date" feature.
-     * It is completely separate from Reminders (date-triggered, expiry-based sends).
-     */
+   
     @Scheduled(fixedDelayString = "${esms.scheduler.campaign-poll-ms:60000}")
     @Transactional
     public void processDueScheduledCampaigns() {
@@ -304,11 +280,9 @@ public class CampaignService {
         }
     }
 
-    // ── Internal ─────────────────────────────────────────────────
 
     private void validateTransition(String wsKind, String fromState, String toState, boolean hasDelegation) {
-        // For non-Finance workspaces with delegation, use "DELEGATION" key;
-        // for Finance workspace, keep "FINANCE"; otherwise use the actual wsKind.
+       
         String effectiveKind;
         if (hasDelegation && !"FINANCE".equals(wsKind)) {
             effectiveKind = "DELEGATION";

@@ -16,10 +16,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * SMS Template REST controller.
- * Lifecycle: DRAFT -> APPROVED -> RETIRED.
- */
+
 @Slf4j
 @RestController
 @RequestMapping("/templates")

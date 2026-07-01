@@ -13,10 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Workspace CRUD + member management.
- * Reference: LLD §6.2
- */
+
 @Slf4j
 @RestController
 @RequestMapping("/workspaces")
@@ -29,7 +26,6 @@ public class WorkspaceController {
     private final et.com.cog.esms.core.identity.WorkspaceMemberRepository memberRepo;
     private final WorkspacePermissionRepository permissionRepo;
 
-    // ── GET /workspaces ──────────────────────────────────────────
     @GetMapping
     @PreAuthorize("hasAuthority('WORKSPACE_VIEW')")
     public ResponseEntity<List<WorkspaceDto>> list() {
@@ -57,7 +53,6 @@ public class WorkspaceController {
         return ResponseEntity.ok(dtos);
     }
 
-    // ── POST /workspaces (Super Admin only) ──────────────────────
     @PostMapping
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<?> create(@Valid @RequestBody CreateWorkspaceRequest req) {
@@ -76,14 +71,12 @@ public class WorkspaceController {
 
         Workspace savedWs = workspaceRepo.save(ws);
 
-        // Add permissions
         if (req.getPermissions() != null) {
             for (String perm : req.getPermissions()) {
                 permissionRepo.save(new WorkspacePermission(savedWs.getId(), perm));
             }
         }
 
-        // Assign Admin if provided
         if (req.getAdminUserId() != null) {
             roleRepo.findByCode("DEPT_HEAD").ifPresent(role -> {
                 userRepo.findById(req.getAdminUserId()).ifPresent(user -> {
@@ -98,7 +91,6 @@ public class WorkspaceController {
             });
         }
 
-        // Assign Delegate (CEO/Director) if the workspace has DELEGATION permission and delegateUserId is provided
         boolean hasDelegation = req.getPermissions() != null && req.getPermissions().contains("DELEGATION");
         if (hasDelegation && req.getDelegateUserId() != null) {
             roleRepo.findByCode("CEO").ifPresentOrElse(
@@ -110,7 +102,6 @@ public class WorkspaceController {
                             .assignedAt(java.time.Instant.now())
                             .assignedBy(WorkspaceContext.currentUserId())
                             .build())),
-                // Fallback: if no CEO role exists, store with DEPT_HEAD and flag via log
                 () -> log.warn("CEO role not found — delegate {} not assigned for workspace {}",
                         req.getDelegateUserId(), savedWs.getId())
             );
@@ -120,7 +111,6 @@ public class WorkspaceController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(savedWs, savedPerms));
     }
 
-    // ── GET /workspaces/{id} ─────────────────────────────────────
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('WORKSPACE_VIEW')")
     public ResponseEntity<WorkspaceDto> get(@PathVariable UUID id) {
@@ -133,7 +123,6 @@ public class WorkspaceController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── PATCH /workspaces/{id} ───────────────────────────────────
     @PatchMapping("/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<?> update(@PathVariable UUID id,
@@ -160,7 +149,6 @@ public class WorkspaceController {
                         if (adminIdStr != null) {
                             UUID adminId = UUID.fromString(adminIdStr);
                             roleRepo.findByCode("DEPT_HEAD").ifPresent(deptHeadRole -> {
-                                // Fix 2: demote all current DEPT_HEAD members before promoting the new one
                                 memberRepo.findByWorkspaceId(id).stream()
                                         .filter(m -> "DEPT_HEAD".equals(m.getRole().getCode())
                                                 && !m.getUser().getId().equals(adminId))
@@ -170,7 +158,6 @@ public class WorkspaceController {
                                                 memberRepo.save(m);
                                             });
                                         });
-                                // Promote new admin
                                 userRepo.findById(adminId).ifPresent(user -> {
                                     memberRepo.findByWorkspaceIdAndUserId(id, adminId)
                                             .ifPresentOrElse(
@@ -191,8 +178,7 @@ public class WorkspaceController {
                         }
                     }
 
-                    // Update delegate (CEO/Director)
-                    // Fix 4: handle both setting and clearing the delegate
+               
                     boolean delegationKeyPresent = updates.containsKey("delegateUserId");
                     List<String> currentPermsForCheck = permissionRepo.findByWorkspaceId(id)
                             .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
@@ -204,14 +190,12 @@ public class WorkspaceController {
                         String delegateIdStr = (String) updates.get("delegateUserId");
 
                         if (delegateIdStr == null || delegateIdStr.isBlank() || !delegationFeatureActive) {
-                            // Clear: remove all existing CEO members for this workspace
                             memberRepo.findByWorkspaceId(id).stream()
                                     .filter(m -> "CEO".equals(m.getRole().getCode()))
                                     .forEach(memberRepo::delete);
                         } else {
                             UUID delegateId = UUID.fromString(delegateIdStr);
                             roleRepo.findByCode("CEO").ifPresent(ceoRole -> {
-                                // Fix 4: demote previous CEO member before assigning new one
                                 memberRepo.findByWorkspaceId(id).stream()
                                         .filter(m -> "CEO".equals(m.getRole().getCode())
                                                 && !m.getUser().getId().equals(delegateId))
@@ -233,7 +217,6 @@ public class WorkspaceController {
                             });
                         }
                     } else if (!delegationFeatureActive) {
-                        // DELEGATION permission was removed — purge any CEO members
                         memberRepo.findByWorkspaceId(id).stream()
                                 .filter(m -> "CEO".equals(m.getRole().getCode()))
                                 .forEach(memberRepo::delete);
@@ -246,7 +229,6 @@ public class WorkspaceController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── POST /workspaces/{id}/deactivate ─────────────────────────
     @PostMapping("/{id}/deactivate")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @org.springframework.transaction.annotation.Transactional
@@ -260,7 +242,6 @@ public class WorkspaceController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    // ── POST /workspaces/{id}/activate ───────────────────────────
     @PostMapping("/{id}/activate")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @org.springframework.transaction.annotation.Transactional
@@ -274,7 +255,6 @@ public class WorkspaceController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    // ── GET /workspaces/{id}/members ─────────────────────────────
     @GetMapping("/{id}/members")
     @PreAuthorize("hasAuthority('WORKSPACE_VIEW')")
     public ResponseEntity<List<Map<String, Object>>> members(@PathVariable UUID id) {
@@ -292,7 +272,6 @@ public class WorkspaceController {
         return ResponseEntity.ok(result);
     }
 
-    // ── POST /workspaces/{id}/members ────────────────────────────
     @PostMapping("/{id}/members")
     @PreAuthorize("hasAuthority('WORKSPACE_MEMBER_ADD')")
     public ResponseEntity<?> addMember(@PathVariable UUID id,
@@ -323,8 +302,7 @@ public class WorkspaceController {
                 .body(Map.of("message", "Member added"));
     }
 
-    // ── PATCH /workspaces/{id}/members/{userId} ──────────────────
-    /** Change a member's role without removing and re-adding them. */
+    
     @PatchMapping("/{id}/members/{userId}")
     @PreAuthorize("hasAuthority('WORKSPACE_MEMBER_ADD')")
     @org.springframework.transaction.annotation.Transactional
@@ -348,7 +326,6 @@ public class WorkspaceController {
         String currentRole = member.getRole().getCode();
         String newRole = roleOpt.get().getCode();
 
-        // Fix #6: disallow demoting the last DEPT_HEAD
         boolean isDemotingLastDeptHead = "DEPT_HEAD".equals(currentRole)
                 && !"DEPT_HEAD".equals(newRole)
                 && memberRepo.findByWorkspaceId(id).stream()
@@ -370,7 +347,6 @@ public class WorkspaceController {
         ));
     }
 
-    // ── DELETE /workspaces/{id}/members/{userId} ─────────────────
     @DeleteMapping("/{id}/members/{userId}")
     @PreAuthorize("hasAuthority('WORKSPACE_MEMBER_REMOVE')")
     @org.springframework.transaction.annotation.Transactional
@@ -378,7 +354,6 @@ public class WorkspaceController {
         if (!memberRepo.existsByWorkspaceIdAndUserId(id, userId)) {
             return ResponseEntity.notFound().build();
         }
-        // Fix #6: disallow removal if user is the last DEPT_HEAD in this workspace
         boolean isLastDeptHead = memberRepo.findByWorkspaceId(id).stream()
                 .filter(m -> "DEPT_HEAD".equals(m.getRole().getCode()))
                 .count() == 1
@@ -394,18 +369,14 @@ public class WorkspaceController {
         return ResponseEntity.noContent().build();
     }
 
-    // ── Helpers ──────────────────────────────────────────────────
 
-    /** Basic DTO without enrichment (used internally). */
     private WorkspaceDto toDto(Workspace ws, List<String> permissions) {
         return toDtoEnriched(ws, permissions);
     }
 
-    /** Enriched DTO with memberCount + admin name + delegate name (no N+1). */
     private WorkspaceDto toDtoEnriched(Workspace ws, List<String> permissions) {
         long memberCount = memberRepo.findByWorkspaceId(ws.getId()).size();
 
-        // Find the DEPT_HEAD of this workspace
         String adminName = memberRepo.findByWorkspaceId(ws.getId()).stream()
                 .filter(m -> "DEPT_HEAD".equals(m.getRole().getCode()))
                 .findFirst()
@@ -417,7 +388,6 @@ public class WorkspaceController {
                 .map(m -> m.getUser().getId())
                 .orElse(null);
 
-        // Find the CEO delegate of this workspace
         String delegateName = memberRepo.findByWorkspaceId(ws.getId()).stream()
                 .filter(m -> "CEO".equals(m.getRole().getCode()))
                 .findFirst()
@@ -435,7 +405,6 @@ public class WorkspaceController {
                 delegateName, delegateUserId);
     }
 
-    // ── DTOs ─────────────────────────────────────────────────────
 
     @Data @AllArgsConstructor
     public static class WorkspaceDto {
@@ -448,7 +417,6 @@ public class WorkspaceController {
         private String       senderMask;
         private Integer      dailySmsLimit;
         private List<String> permissions;
-        // ── enriched ──
         private int          memberCount;
         private String       adminName;
         private UUID         adminUserId;
@@ -462,13 +430,8 @@ public class WorkspaceController {
         @NotBlank private String name;
         private String kind;
         private String division;
-        /** Admin (Department Head) of this workspace. */
         private UUID adminUserId;
-        /**
-         * Delegate user (CEO / Director) — required when the workspace permissions
-         * include DELEGATION (i.e. messages need CEO/Director sign-off).
-         * Ignored if DELEGATION is not in the permissions list.
-         */
+        
         private UUID delegateUserId;
         private List<String> permissions;
     }
