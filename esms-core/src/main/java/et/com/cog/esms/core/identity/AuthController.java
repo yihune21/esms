@@ -15,13 +15,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
-// import java.time.Duration;
 import java.util.*;
 
-/**
- * Authentication controller — login, OTP verification, token refresh, logout.
- * Reference: LLD §6.1
- */
+
 @Slf4j
 @RestController
 @RequestMapping("/auth")

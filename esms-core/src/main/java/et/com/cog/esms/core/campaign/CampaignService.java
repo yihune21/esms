@@ -74,6 +74,14 @@ public class CampaignService {
                 throw new IllegalArgumentException("scheduledAt must be a future date/time");
             }
         }
+        if (recipientGroupId == null && uploadId == null) {
+            throw new IllegalArgumentException(
+                    "A campaign must have a recipient source: provide recipientGroupId (contact group) or uploadId (file upload)");
+        }
+        if (templateId == null && (customBody == null || customBody.isBlank())) {
+            throw new IllegalArgumentException(
+                    "A campaign must have a message: provide templateId or customBody");
+        }
         Campaign c = Campaign.builder()
                 .workspaceId(workspaceId)
                 .name(name)

@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -69,6 +70,20 @@ public class GlobalExceptionHandler {
                 .body(problem);
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ProblemDetail> handleIllegalArgument(IllegalArgumentException ex) {
+        ProblemDetail problem = ProblemDetail.builder()
+                .type(URI.create("/errors/bad-request"))
+                .title("Bad request")
+                .status(400)
+                .detail(ex.getMessage())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .header("Content-Type", "application/problem+json")
+                .body(problem);
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ProblemDetail> handleIllegalState(IllegalStateException ex) {
         ProblemDetail problem = ProblemDetail.builder()
@@ -76,6 +91,20 @@ public class GlobalExceptionHandler {
                 .title("Conflict")
                 .status(409)
                 .detail(ex.getMessage())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .header("Content-Type", "application/problem+json")
+                .body(problem);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ProblemDetail> handleDataIntegrity(DataIntegrityViolationException ex) {
+        ProblemDetail problem = ProblemDetail.builder()
+                .type(URI.create("/errors/conflict"))
+                .title("Data conflict")
+                .status(409)
+                .detail("A record with that identifier already exists")
                 .build();
 
         return ResponseEntity.status(HttpStatus.CONFLICT)

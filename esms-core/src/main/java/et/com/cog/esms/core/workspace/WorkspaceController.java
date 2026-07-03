@@ -125,14 +125,19 @@ public class WorkspaceController {
 
     @PatchMapping("/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> update(@PathVariable UUID id,
                                     @RequestBody Map<String, Object> updates) {
         return workspaceRepo.findById(id)
                 .map(ws -> {
                     if (updates.containsKey("name")) ws.setName((String) updates.get("name"));
                     if (updates.containsKey("division")) ws.setDivision((String) updates.get("division"));
+                    if (updates.containsKey("status")) ws.setStatus((String) updates.get("status"));
                     if (updates.containsKey("senderMask")) ws.setSenderMask((String) updates.get("senderMask"));
-                    if (updates.containsKey("dailySmsLimit")) ws.setDailySmsLimit((Integer) updates.get("dailySmsLimit"));
+                    if (updates.containsKey("dailySmsLimit")) {
+                        Object raw = updates.get("dailySmsLimit");
+                        if (raw instanceof Number) ws.setDailySmsLimit(((Number) raw).intValue());
+                    }
                     workspaceRepo.save(ws);
                     
                     if (updates.containsKey("permissions")) {

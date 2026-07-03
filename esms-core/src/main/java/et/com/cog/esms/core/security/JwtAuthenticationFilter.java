@@ -88,10 +88,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         List<String> effectivePermissions = new ArrayList<>(jwtPermissions);
 
-        boolean isDbSuperAdmin = false;
+        boolean isDbSuperAdmin = "SUPER_ADMIN".equals(roleCode);
         try {
-            isDbSuperAdmin = memberRepo.findByUserId(userId).stream()
-                    .anyMatch(m -> "SUPER_ADMIN".equals(m.getRole().getCode()));
+            if (!isDbSuperAdmin) {
+                isDbSuperAdmin = memberRepo.findByUserId(userId).stream()
+                        .anyMatch(m -> "SUPER_ADMIN".equals(m.getRole().getCode()));
+            }
             if (isDbSuperAdmin) {
                 roleRepo.findByCode("SUPER_ADMIN").ifPresent(superAdminRole -> {
                     List<String> superAdminCodes = superAdminRole.getPermissionCodes();
