@@ -513,8 +513,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"name\": \"Marketing Dept Updated\",\n    \"senderMask\": \"MKTG\",\n    \"dailySmsLimit\": 5000,\n    \"division\": \"New HQ\",\n    \"delegateUserId\": \"{{delegateUserId}}\",\n    \"permissions\": [\n        \"WORKSPACE_VIEW\",\n        \"CONTACT_VIEW\",\n        \"TEMPLATE_VIEW\",\n        \"DELEGATION\"\n    ]\n}"
+              "raw": "{\n  \"name\": \"Marketing Dept Updated\",\n  \"status\": \"ACTIVE\",\n  \"senderMask\": \"MKTG\",\n  \"dailySmsLimit\": 5000,\n  \"division\": \"New HQ\",\n  \"adminUserId\": \"{{userId}}\",\n  \"delegateUserId\": \"{{delegateUserId}}\",\n  \"permissions\": [\n    \"WORKSPACE_VIEW\",\n    \"CONTACT_VIEW\",\n    \"TEMPLATE_VIEW\",\n    \"DELEGATION\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
+            "description": "Partially update a workspace. All fields are optional.\n\n- status: ACTIVE | SUSPENDED\n- dailySmsLimit: any integer (safe for all numeric sizes)\n- adminUserId: reassigns the DEPT_HEAD role to this user\n- delegateUserId: assigns CEO role (only meaningful when DELEGATION permission is active); set to null to remove the delegate\n- permissions: replaces the full permission set for this workspace",
             "url": {
               "raw": "{{baseUrl}}/workspaces/:id",
               "host": [
@@ -1301,7 +1307,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Policy Renewal Reminder\",\n  \"body\": \"Dear {{name}}, your policy {{policyNumber}} expires on {{expiryDate}}. Please renew to stay covered.\",\n  \"encoding\": \"GSM7\",\n  \"recipientGroupId\": \"<group_uuid>\"\n}"
+              "raw": "{\n  \"name\": \"Policy Renewal Reminder\",\n  \"body\": \"Dear {{name}}, your policy {{policyNumber}} expires on {{expiryDate}}. Please renew to stay covered.\",\n  \"encoding\": \"GSM7\",\n  \"recipientGroupId\": \"<group_uuid>\",\n  \"recipients\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/templates",
@@ -1312,7 +1323,7 @@
                 "templates"
               ]
             },
-            "description": "Create a new template. Under the new security model, a template must have at least one recipient source (either a non-null recipientGroupId or a non-empty list of inline recipients)."
+            "description": "Create a new template. Provide either recipientGroupId (a contact-group UUID) OR a non-empty inline recipients array (each item must have phoneE164 in E.164 format and optional name). recipientGroupId is now nullable — you may omit it if inline recipients are supplied instead."
           }
         },
         {
@@ -1658,7 +1669,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"name\": \"Promo 2026\",\n    \"kind\": \"PROMOTIONAL\",\n    \"templateId\": \"<template_uuid>\",\n    \"recipientGroupId\": \"<group_uuid>\",\n    \"customBody\": null,\n    \"scheduledAt\": \"2026-06-01T10:00:00Z\",\n    \"uploadId\": \"{{upload_id}}\"\n}"
+              "raw": "{\n  \"name\": \"Promo 2026\",\n  \"kind\": \"INSTANT\",\n  \"templateId\": \"<template_uuid>\",\n  \"recipientGroupId\": \"<group_uuid>\",\n  \"uploadId\": null,\n  \"customBody\": null,\n  \"scheduledAt\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/campaigns",
@@ -1668,7 +1684,43 @@
               "path": [
                 "campaigns"
               ]
-            }
+            },
+            "description": "Create a campaign draft.\n\nRequired:\n- kind: INSTANT | SCHEDULED (SCHEDULED requires scheduledAt in the future)\n- Recipient source (one of):\n  - recipientGroupId — existing contact group UUID\n  - uploadId — ID from a standalone file upload (POST /groups/uploads)\n- Message source (one of):\n  - templateId — approved template UUID\n  - customBody — plain-text message body\n\nOmitting both recipient fields OR both message fields returns HTTP 400."
+          }
+        },
+        {
+          "name": "Create Campaign (Upload File as Recipient)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Upload-Based Campaign\",\n  \"kind\": \"INSTANT\",\n  \"templateId\": \"<template_uuid>\",\n  \"recipientGroupId\": null,\n  \"uploadId\": \"{{uploadId}}\",\n  \"customBody\": null,\n  \"scheduledAt\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/campaigns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "campaigns"
+              ]
+            },
+            "description": "Create a campaign using a standalone file upload as the recipient source instead of a contact group. First call POST /groups/uploads to get an uploadId, then pass it here."
           }
         },
         {
@@ -1790,7 +1842,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Promo 2026 Revised\",\n  \"templateId\": \"<template_uuid>\",\n  \"recipientGroupId\": \"<group_uuid>\",\n  \"customBody\": null,\n  \"scheduledAt\": \"2026-06-15T10:00:00Z\"\n}"
+              "raw": "{\n  \"name\": \"Promo 2026 Revised\",\n  \"kind\": \"SCHEDULED\",\n  \"templateId\": \"<template_uuid>\",\n  \"recipientGroupId\": \"<group_uuid>\",\n  \"uploadId\": null,\n  \"customBody\": null,\n  \"scheduledAt\": \"2026-06-15T10:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/campaigns/:id",
@@ -1807,7 +1864,8 @@
                   "value": "<campaign_uuid>"
                 }
               ]
-            }
+            },
+            "description": "Full replacement update for a DRAFT campaign. kind must be INSTANT or SCHEDULED. Supply uploadId as an alternative to recipientGroupId."
           }
         },
         {
