@@ -94,17 +94,16 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
                m.status                  AS status,
                COUNT(*)                  AS total
         FROM message m
-        WHERE (:allWorkspaces = true OR m.workspace_id = CAST(:wsId AS uuid))
-          AND (:from IS NULL OR m.created_at >= :from)
-          AND (:to   IS NULL OR m.created_at <= :to)
+        WHERE (:wsId IS NULL OR m.workspace_id = CAST(CAST(:wsId AS text) AS uuid))
+          AND (:from IS NULL OR m.created_at >= CAST(:from AS timestamptz))
+          AND (:to   IS NULL OR m.created_at <= CAST(:to AS timestamptz))
         GROUP BY CAST(m.created_at AS date), m.status
         ORDER BY CAST(m.created_at AS date)
         """, nativeQuery = true)
     List<DailyTrendPoint> findDailyTrend(
-            @Param("wsId")          UUID    workspaceId,
-            @Param("allWorkspaces") boolean allWorkspaces,
-            @Param("from")          Instant from,
-            @Param("to")            Instant to
+            @Param("wsId")  UUID    workspaceId,
+            @Param("from")  Instant from,
+            @Param("to")    Instant to
     );
 
    
@@ -115,17 +114,16 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
                COUNT(*) FILTER (WHERE m.status = 'FAILED')              AS failed,
                COUNT(*) FILTER (WHERE m.status IN ('PENDING','QUEUED')) AS pending
         FROM message m
-        WHERE (:allWorkspaces = true OR m.workspace_id = CAST(:wsId AS uuid))
+        WHERE (:wsId IS NULL OR m.workspace_id = CAST(CAST(:wsId AS text) AS uuid))
           AND m.campaign_id IS NOT NULL
-          AND (:from IS NULL OR m.created_at >= :from)
-          AND (:to   IS NULL OR m.created_at <= :to)
+          AND (:from IS NULL OR m.created_at >= CAST(:from AS timestamptz))
+          AND (:to   IS NULL OR m.created_at <= CAST(:to AS timestamptz))
         GROUP BY m.campaign_id
         ORDER BY delivered DESC
         """, nativeQuery = true)
     List<CampaignSummaryPoint> findCampaignSummaries(
-            @Param("wsId")          UUID    workspaceId,
-            @Param("allWorkspaces") boolean allWorkspaces,
-            @Param("from")          Instant from,
-            @Param("to")            Instant to
+            @Param("wsId")  UUID    workspaceId,
+            @Param("from")  Instant from,
+            @Param("to")    Instant to
     );
 }

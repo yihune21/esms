@@ -89,7 +89,7 @@ public class ReportService {
 
    
     public List<DailyTrendDto> getDailyTrend(UUID workspaceId, Instant from, Instant to) {
-        return messageRepo.findDailyTrend(workspaceId, workspaceId == null, from, to)
+        return messageRepo.findDailyTrend(workspaceId, from, to)
                 .stream()
                 .map(p -> new DailyTrendDto(p.getDay(), p.getStatus(), p.getTotal()))
                 .toList();
@@ -97,7 +97,7 @@ public class ReportService {
 
 
     public List<CampaignSummaryDto> getCampaignSummaries(UUID workspaceId, Instant from, Instant to) {
-        return messageRepo.findCampaignSummaries(workspaceId, workspaceId == null, from, to)
+        return messageRepo.findCampaignSummaries(workspaceId, from, to)
                 .stream()
                 .map(p -> new CampaignSummaryDto(
                         p.getCampaignId(),

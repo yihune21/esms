@@ -8,6 +8,7 @@
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/audit/AuditLog.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/audit/AuditLogController.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/audit/AuditLogRepository.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/audit/AuditService.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/campaign/Approval.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/campaign/ApprovalRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/campaign/Campaign.java

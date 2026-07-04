@@ -5,6 +5,7 @@ et/com/cog/esms/core/identity/OtpService$OtpVerificationResult.class
 et/com/cog/esms/core/campaign/Campaign.class
 et/com/cog/esms/core/reporting/ReportService.class
 et/com/cog/esms/core/admin/CarrierPrefixController.class
+et/com/cog/esms/core/audit/AuditService.class
 et/com/cog/esms/core/contact/ContactUploadRepository.class
 et/com/cog/esms/core/workspace/Permission$PermissionBuilder.class
 et/com/cog/esms/core/reporting/DeliveryReport.class

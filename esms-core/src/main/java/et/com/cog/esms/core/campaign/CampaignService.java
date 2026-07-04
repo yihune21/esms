@@ -1,5 +1,6 @@
 package et.com.cog.esms.core.campaign;
 
+import et.com.cog.esms.core.audit.AuditService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import et.com.cog.esms.core.messaging.OutboxEvent;
@@ -29,6 +30,8 @@ public class CampaignService {
     private final OutboxEventRepository outboxRepo;
     private final ObjectMapper objectMapper;
     private final WorkspacePermissionRepository permissionRepo;
+    private final AuditService auditService;
+
 
     private static final Map<String, Set<String>> TRANSITIONS = Map.ofEntries(
         Map.entry("UNDERWRITING:DRAFT",            Set.of("PENDING_APPROVAL")),
@@ -94,7 +97,9 @@ public class CampaignService {
                 .scheduledAt(scheduledAt)
                 .createdBy(WorkspaceContext.currentUserId())
                 .build();
-        return campaignRepo.save(c);
+        Campaign saved = campaignRepo.save(c);
+        auditService.log(workspaceId, "CAMPAIGN", "INFO", "CAMPAIGN_CREATED", "Campaign", saved.getId());
+        return saved;
     }
 
     @Transactional
@@ -117,7 +122,10 @@ public class CampaignService {
 
         recordApproval(c, c.getStatus(), targetState, null);
         c.setStatus(targetState);
-        return campaignRepo.save(c);
+        Campaign saved = campaignRepo.save(c);
+        auditService.log(saved.getWorkspaceId(), "CAMPAIGN", "INFO",
+                "CAMPAIGN_SUBMITTED", "Campaign", saved.getId());
+        return saved;
     }
 
     @Transactional
@@ -186,6 +194,8 @@ public class CampaignService {
                 log.error("Failed to serialize payload for instant campaign id={}: {}", saved.getId(), e.getMessage(), e);
             }
         }
+        auditService.log(saved.getWorkspaceId(), "CAMPAIGN", "INFO",
+                "CAMPAIGN_APPROVED_TO_" + saved.getStatus(), "Campaign", saved.getId());
         return saved;
     }
 
@@ -202,7 +212,10 @@ public class CampaignService {
         validateTransition(ws.getKind(), c.getStatus(), "DRAFT", hasDelegation);
         recordApproval(c, c.getStatus(), "DRAFT", note);
         c.setStatus("DRAFT");
-        return campaignRepo.save(c);
+        Campaign saved = campaignRepo.save(c);
+        auditService.log(saved.getWorkspaceId(), "CAMPAIGN", "WARN",
+                "CAMPAIGN_REJECTED", "Campaign", saved.getId());
+        return saved;
     }
 
     
@@ -246,7 +259,10 @@ public class CampaignService {
         c.setStatus("CANCELLED");
         c.setCompletedAt(Instant.now());
         log.info("Campaign cancelled: id={}, by={}", campaignId, WorkspaceContext.currentUserId());
-        return campaignRepo.save(c);
+        Campaign saved = campaignRepo.save(c);
+        auditService.log(saved.getWorkspaceId(), "CAMPAIGN", "WARN",
+                "CAMPAIGN_CANCELLED", "Campaign", saved.getId());
+        return saved;
     }
 
    

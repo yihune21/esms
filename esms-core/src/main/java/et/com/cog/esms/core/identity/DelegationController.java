@@ -21,6 +21,11 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 
+import et.com.cog.esms.core.workspace.Role;
+import et.com.cog.esms.core.workspace.RoleRepository;
+import et.com.cog.esms.core.workspace.Workspace;
+import et.com.cog.esms.core.workspace.WorkspaceRepository;
+
 @RestController
 @RequestMapping("/delegations")
 @RequiredArgsConstructor
@@ -28,6 +33,9 @@ public class DelegationController {
 
     private final DelegationRepository delegationRepo;
     private final UserRepository       userRepo;
+    private final WorkspaceRepository  workspaceRepo;
+    private final WorkspaceMemberRepository memberRepo;
+    private final RoleRepository       roleRepo;
 
 
     @PostMapping
@@ -78,6 +86,23 @@ public class DelegationController {
                 .build();
 
         Delegation saved = delegationRepo.save(delegation);
+
+        if (!memberRepo.existsByWorkspaceIdAndUserId(wsId, req.getToUserId())) {
+            roleRepo.findByCode("VIEWER").ifPresent(viewerRole ->
+                userRepo.findById(req.getToUserId()).ifPresent(delegateUser -> {
+                    workspaceRepo.findById(wsId).ifPresent(ws ->
+                        memberRepo.save(WorkspaceMember.builder()
+                                .workspace(ws)
+                                .user(delegateUser)
+                                .role(viewerRole)
+                                .assignedAt(java.time.Instant.now())
+                                .assignedBy(WorkspaceContext.currentUserId())
+                                .build())
+                    );
+                })
+            );
+        }
+
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(saved));
     }
 

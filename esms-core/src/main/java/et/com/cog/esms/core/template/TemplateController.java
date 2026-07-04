@@ -104,7 +104,7 @@ public class TemplateController {
                 .map(t -> {
                     if (!"DRAFT".equals(t.getStatus())) {
                         return ResponseEntity.status(HttpStatus.CONFLICT)
-                                .<TemplateDto>body(null);
+                                .body(Map.of("title", "Only DRAFT templates can be edited. Current status: " + t.getStatus()));
                     }
                     if (updates.containsKey("name"))             t.setName((String) updates.get("name"));
                     if (updates.containsKey("description"))      t.setDescription((String) updates.get("description"));
@@ -112,8 +112,8 @@ public class TemplateController {
                     if (updates.containsKey("encoding"))         t.setEncoding((String) updates.get("encoding"));
                     if (updates.containsKey("sender"))           t.setSender((String) updates.get("sender"));
                     if (updates.containsKey("recipientGroupId")) {
-                        String raw = (String) updates.get("recipientGroupId");
-                        t.setRecipientGroupId(raw != null ? UUID.fromString(raw) : null);
+                        Object raw = updates.get("recipientGroupId");
+                        t.setRecipientGroupId(raw != null ? UUID.fromString((String) raw) : null);
                     }
                     if (t.getRecipientGroupId() == null) {
                         long inlineCount = recipientRepo.countByTemplateId(t.getId());

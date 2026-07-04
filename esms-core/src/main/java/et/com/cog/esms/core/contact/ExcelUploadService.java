@@ -139,10 +139,12 @@ public class ExcelUploadService {
                     contact = contactRepo.save(contact);
 
                     if (groupId != null) {
-                        memberRepo.save(ContactGroupMember.builder()
-                                .groupId(groupId)
-                                .contactId(contact.getId())
-                                .build());
+                        if (!memberRepo.existsByGroupIdAndContactId(groupId, contact.getId())) {
+                            memberRepo.save(ContactGroupMember.builder()
+                                    .groupId(groupId)
+                                    .contactId(contact.getId())
+                                    .build());
+                        }
                     }
 
                     importedCount++;
