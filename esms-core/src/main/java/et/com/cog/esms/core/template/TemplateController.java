@@ -158,7 +158,7 @@ public class TemplateController {
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
-//
+
     @PostMapping("/{id}/reject")
     @PreAuthorize("hasAuthority('TEMPLATE_APPROVE')")
     public ResponseEntity<?> reject(@PathVariable UUID id, @RequestBody Map<String, String> payload) {

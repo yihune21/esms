@@ -95,8 +95,8 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
                COUNT(*)                  AS total
         FROM message m
         WHERE (:wsId IS NULL OR m.workspace_id = CAST(CAST(:wsId AS text) AS uuid))
-          AND (:from IS NULL OR m.created_at >= CAST(:from AS timestamptz))
-          AND (:to   IS NULL OR m.created_at <= CAST(:to AS timestamptz))
+          AND (:from IS NULL OR m.created_at >= CAST(CAST(:from AS text) AS timestamptz))
+          AND (:to   IS NULL OR m.created_at <= CAST(CAST(:to AS text) AS timestamptz))
         GROUP BY CAST(m.created_at AS date), m.status
         ORDER BY CAST(m.created_at AS date)
         """, nativeQuery = true)
@@ -116,8 +116,8 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
         FROM message m
         WHERE (:wsId IS NULL OR m.workspace_id = CAST(CAST(:wsId AS text) AS uuid))
           AND m.campaign_id IS NOT NULL
-          AND (:from IS NULL OR m.created_at >= CAST(:from AS timestamptz))
-          AND (:to   IS NULL OR m.created_at <= CAST(:to AS timestamptz))
+          AND (:from IS NULL OR m.created_at >= CAST(CAST(:from AS text) AS timestamptz))
+          AND (:to   IS NULL OR m.created_at <= CAST(CAST(:to AS text) AS timestamptz))
         GROUP BY m.campaign_id
         ORDER BY delivered DESC
         """, nativeQuery = true)

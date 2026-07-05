@@ -8,4 +8,5 @@ import java.util.UUID;
 
 @Repository
 public interface AuditLogRepository extends JpaRepository<AuditLog, UUID>, JpaSpecificationExecutor<AuditLog> {
+    java.util.Optional<AuditLog> findFirstByOrderBySeqDesc();
 }

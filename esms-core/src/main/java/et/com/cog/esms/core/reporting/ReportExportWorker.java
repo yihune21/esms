@@ -33,7 +33,7 @@ public class ReportExportWorker {
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public void handleExportEvent(ReportExportEvent event) {
         UUID exportId = event.exportId();
         ReportExportRequest req = event.request();

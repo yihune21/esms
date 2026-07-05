@@ -99,10 +99,15 @@ public class ExcelUploadService {
                         continue;
                     }
 
-                    if (seenPhonesInBatch.contains(phone)
-                            || contactRepo.existsByWorkspaceIdAndPhoneE164(workspaceId, phone)) {
+                    if (seenPhonesInBatch.contains(phone)) {
                         duplicateCount++;
-                        if (groupId != null && !seenPhonesInBatch.contains(phone)) {
+                        continue;
+                    }
+                    seenPhonesInBatch.add(phone);
+
+                    if (contactRepo.existsByWorkspaceIdAndPhoneE164(workspaceId, phone)) {
+                        duplicateCount++;
+                        if (groupId != null) {
                             contactRepo.findByWorkspaceIdAndPhoneE164(workspaceId, phone)
                                     .ifPresent(existing -> {
                                         if (!memberRepo.existsByGroupIdAndContactId(groupId, existing.getId())) {
@@ -115,7 +120,6 @@ public class ExcelUploadService {
                         }
                         continue;
                     }
-                    seenPhonesInBatch.add(phone);
 
                     Map<String, String> extra = new LinkedHashMap<>();
                     for (int colIdx = 0; colIdx < headers.size(); colIdx++) {

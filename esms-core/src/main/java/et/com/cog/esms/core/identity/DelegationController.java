@@ -61,7 +61,7 @@ public class DelegationController {
         }
 
         Instant startsAt = req.getStartsAt() != null ? req.getStartsAt() : Instant.now();
-        Instant endsAt   = req.getEndsAt(); // Fix 6b: may be null (standing delegation)
+        Instant endsAt   = req.getEndsAt();
 
         if (endsAt != null) {
             if (endsAt.isBefore(startsAt)) {
@@ -126,7 +126,6 @@ public class DelegationController {
             list = list.stream()
                     .filter(d -> !d.isRevoked()
                             && d.getStartsAt().isBefore(now)
-                            // null endsAt = no expiry → always active
                             && (d.getEndsAt() == null || d.getEndsAt().isAfter(now)))
                     .collect(Collectors.toList());
         }
