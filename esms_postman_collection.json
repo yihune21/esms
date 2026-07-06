@@ -39,6 +39,46 @@
       "key": "delegateUserId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "workspaceId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "groupId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "contactId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "templateId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "delegationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "prefixId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "uploadId",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -272,11 +312,17 @@
           "name": "List Users",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
             "url": {
-              "raw": "{{base_url}}/users",
+              "raw": "{{baseUrl}}/users",
               "host": [
-                "{{base_url}}"
+                "{{baseUrl}}"
               ],
               "path": [
                 "users"
@@ -288,15 +334,21 @@
           "name": "Get User Details",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
             "url": {
-              "raw": "{{base_url}}/users/{{user_id}}",
+              "raw": "{{baseUrl}}/users/{{userId}}",
               "host": [
-                "{{base_url}}"
+                "{{baseUrl}}"
               ],
               "path": [
                 "users",
-                "{{user_id}}"
+                "{{userId}}"
               ]
             }
           }
@@ -305,7 +357,13 @@
           "name": "Create User",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"username\": \"jdoe\",\n    \"displayName\": \"John Doe\",\n    \"email\": \"jdoe@example.com\",\n    \"password\": \"secret123\"\n}",
@@ -316,9 +374,9 @@
               }
             },
             "url": {
-              "raw": "{{base_url}}/users",
+              "raw": "{{baseUrl}}/users",
               "host": [
-                "{{base_url}}"
+                "{{baseUrl}}"
               ],
               "path": [
                 "users"
@@ -330,7 +388,13 @@
           "name": "Update User",
           "request": {
             "method": "PATCH",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"displayName\": \"Johnathan Doe\"\n}",
@@ -341,13 +405,13 @@
               }
             },
             "url": {
-              "raw": "{{base_url}}/users/{{user_id}}",
+              "raw": "{{baseUrl}}/users/{{userId}}",
               "host": [
-                "{{base_url}}"
+                "{{baseUrl}}"
               ],
               "path": [
                 "users",
-                "{{user_id}}"
+                "{{userId}}"
               ]
             }
           }
@@ -356,15 +420,21 @@
           "name": "Deactivate User",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
             "url": {
-              "raw": "{{base_url}}/users/{{user_id}}/deactivate",
+              "raw": "{{baseUrl}}/users/{{userId}}/deactivate",
               "host": [
-                "{{base_url}}"
+                "{{baseUrl}}"
               ],
               "path": [
                 "users",
-                "{{user_id}}",
+                "{{userId}}",
                 "deactivate"
               ]
             }
@@ -374,15 +444,21 @@
           "name": "Activate User",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
             "url": {
-              "raw": "{{base_url}}/users/{{user_id}}/activate",
+              "raw": "{{baseUrl}}/users/{{userId}}/activate",
               "host": [
-                "{{base_url}}"
+                "{{baseUrl}}"
               ],
               "path": [
                 "users",
-                "{{user_id}}",
+                "{{userId}}",
                 "activate"
               ]
             }
@@ -456,7 +532,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"code\": \"WS-01\",\n    \"name\": \"Marketing Dept\",\n    \"kind\": \"GENERIC\",\n    \"division\": \"HQ\",\n    \"adminUserId\": \"{{user_id}}\",\n    \"delegateUserId\": \"{{delegateUserId}}\",\n    \"permissions\": [\n        \"WORKSPACE_VIEW\",\n        \"CONTACT_VIEW\",\n        \"DELEGATION\"\n    ]\n}"
+              "raw": "{\n    \"code\": \"WS-01\",\n    \"name\": \"Marketing Dept\",\n    \"kind\": \"GENERIC\",\n    \"division\": \"HQ\",\n    \"adminUserId\": \"{{userId}}\",\n    \"delegateUserId\": \"{{delegateUserId}}\",\n    \"permissions\": [\n        \"WORKSPACE_VIEW\",\n        \"CONTACT_VIEW\",\n        \"DELEGATION\"\n    ]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/workspaces",
@@ -609,15 +685,21 @@
           "name": "Deactivate Workspace",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
             "url": {
-              "raw": "{{base_url}}/workspaces/{{workspace_id}}/deactivate",
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/deactivate",
               "host": [
-                "{{base_url}}"
+                "{{baseUrl}}"
               ],
               "path": [
                 "workspaces",
-                "{{workspace_id}}",
+                "{{workspaceId}}",
                 "deactivate"
               ]
             }
@@ -627,15 +709,21 @@
           "name": "Activate Workspace",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
             "url": {
-              "raw": "{{base_url}}/workspaces/{{workspace_id}}/activate",
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/activate",
               "host": [
-                "{{base_url}}"
+                "{{baseUrl}}"
               ],
               "path": [
                 "workspaces",
-                "{{workspace_id}}",
+                "{{workspaceId}}",
                 "activate"
               ]
             }
@@ -839,13 +927,13 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/contacts/{{contact_id}}/deactivate",
+              "raw": "{{baseUrl}}/contacts/{{contactId}}/deactivate",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "contacts",
-                "{{contact_id}}",
+                "{{contactId}}",
                 "deactivate"
               ],
               "variable": [
@@ -861,15 +949,21 @@
           "name": "Activate Contact",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
             "url": {
-              "raw": "{{base_url}}/contacts/{{contact_id}}/activate",
+              "raw": "{{baseUrl}}/contacts/{{contactId}}/activate",
               "host": [
-                "{{base_url}}"
+                "{{baseUrl}}"
               ],
               "path": [
                 "contacts",
-                "{{contact_id}}",
+                "{{contactId}}",
                 "activate"
               ]
             }
@@ -1005,13 +1099,13 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/groups/{{group_id}}/deactivate",
+              "raw": "{{baseUrl}}/groups/{{groupId}}/deactivate",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "groups",
-                "{{group_id}}",
+                "{{groupId}}",
                 "deactivate"
               ],
               "variable": [
@@ -1127,15 +1221,21 @@
           "name": "Activate Group",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
             "url": {
-              "raw": "{{base_url}}/groups/{{group_id}}/activate",
+              "raw": "{{baseUrl}}/groups/{{groupId}}/activate",
               "host": [
-                "{{base_url}}"
+                "{{baseUrl}}"
               ],
               "path": [
                 "groups",
-                "{{group_id}}",
+                "{{groupId}}",
                 "activate"
               ]
             }
@@ -1145,7 +1245,13 @@
           "name": "Upload Contacts to Group",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
             "body": {
               "mode": "formdata",
               "formdata": [
@@ -1157,13 +1263,13 @@
               ]
             },
             "url": {
-              "raw": "{{base_url}}/groups/{{group_id}}/upload",
+              "raw": "{{baseUrl}}/groups/{{groupId}}/upload",
               "host": [
-                "{{base_url}}"
+                "{{baseUrl}}"
               ],
               "path": [
                 "groups",
-                "{{group_id}}",
+                "{{groupId}}",
                 "upload"
               ]
             }
@@ -1181,13 +1287,13 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/groups/{{group_id}}/uploads",
+              "raw": "{{baseUrl}}/groups/{{groupId}}/uploads",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "groups",
-                "{{group_id}}",
+                "{{groupId}}",
                 "uploads"
               ]
             },
@@ -1207,13 +1313,13 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/groups/{{group_id}}/members/export",
+              "raw": "{{baseUrl}}/groups/{{groupId}}/members/export",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "groups",
-                "{{group_id}}",
+                "{{groupId}}",
                 "members",
                 "export"
               ]

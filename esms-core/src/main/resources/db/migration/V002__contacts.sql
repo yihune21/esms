@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 CREATE TABLE contact_upload (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     workspace_id    UUID         NOT NULL REFERENCES workspace(id),
