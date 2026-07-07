@@ -72,6 +72,7 @@ public class ReportController {
                         e.getId(), e.getStatus(), e.getFormat(),
                         e.getCreatedAt(), e.getCompletedAt(), e.getFilePath()))
                 .toList();
+        
         return ResponseEntity.ok(result);
     }
 

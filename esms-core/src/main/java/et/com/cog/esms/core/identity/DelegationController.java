@@ -1,5 +1,6 @@
 package et.com.cog.esms.core.identity;
 
+import et.com.cog.esms.core.audit.AuditService;
 import et.com.cog.esms.core.security.WorkspaceContext;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Future;
@@ -21,9 +22,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 
-import et.com.cog.esms.core.workspace.Role;
 import et.com.cog.esms.core.workspace.RoleRepository;
-import et.com.cog.esms.core.workspace.Workspace;
 import et.com.cog.esms.core.workspace.WorkspaceRepository;
 
 @RestController
@@ -36,9 +35,9 @@ public class DelegationController {
     private final WorkspaceRepository  workspaceRepo;
     private final WorkspaceMemberRepository memberRepo;
     private final RoleRepository       roleRepo;
+    private final AuditService         auditService;
 
-
-    @PostMapping
+@PostMapping
     @PreAuthorize("hasAuthority('ADMIN_DELEGATE')")
     public ResponseEntity<?> create(@Valid @RequestBody CreateDelegationRequest req) {
         UUID wsId = (req.getWorkspaceId() != null)
@@ -53,10 +52,12 @@ public class DelegationController {
         UUID fromUserId = WorkspaceContext.currentUserId();
 
         if (req.getToUserId().equals(fromUserId)) {
+            auditService.log(wsId, "ADMIN", "WARN", "DELEGATION_SELF_ATTEMPT", "Delegation", null);
             return ResponseEntity.badRequest().body(Map.of("title", "Cannot delegate to yourself"));
         }
 
         if (!userRepo.existsById(req.getToUserId())) {
+            auditService.log(wsId, "ADMIN", "WARN", "DELEGATION_TARGET_NOT_FOUND", "Delegation", null);
             return ResponseEntity.badRequest().body(Map.of("title", "Delegate user not found"));
         }
 
@@ -65,11 +66,13 @@ public class DelegationController {
 
         if (endsAt != null) {
             if (endsAt.isBefore(startsAt)) {
+                auditService.log(wsId, "ADMIN", "WARN", "DELEGATION_INVALID_WINDOW", "Delegation", null);
                 return ResponseEntity.badRequest().body(Map.of("title", "endsAt must be after startsAt"));
             }
-            
+
             long days = ChronoUnit.DAYS.between(startsAt, endsAt);
             if (days > 365) {
+                auditService.log(wsId, "ADMIN", "WARN", "DELEGATION_WINDOW_TOO_LONG", "Delegation", null);
                 return ResponseEntity.badRequest()
                         .body(Map.of("title", "Delegation window cannot exceed 365 days; omit endsAt for a standing delegation"));
             }
@@ -87,6 +90,7 @@ public class DelegationController {
 
         Delegation saved = delegationRepo.save(delegation);
 
+        boolean grantedMembership = false;
         if (!memberRepo.existsByWorkspaceIdAndUserId(wsId, req.getToUserId())) {
             roleRepo.findByCode("VIEWER").ifPresent(viewerRole ->
                 userRepo.findById(req.getToUserId()).ifPresent(delegateUser -> {
@@ -101,6 +105,13 @@ public class DelegationController {
                     );
                 })
             );
+            grantedMembership = true;
+        }
+
+        auditService.log(wsId, "ADMIN", "INFO", "DELEGATION_CREATED", "Delegation", saved.getId());
+        if (grantedMembership) {
+            auditService.log(wsId, "ADMIN", "INFO", "DELEGATION_AUTO_GRANTED_VIEWER_MEMBERSHIP",
+                    "WorkspaceMember", req.getToUserId());
         }
 
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(saved));
@@ -164,6 +175,10 @@ public class DelegationController {
                     }
                     d.setRevoked(true);
                     delegationRepo.save(d);
+
+                    auditService.log(d.getWorkspaceId(), "ADMIN", "INFO",
+                            "DELEGATION_REVOKED", "Delegation", d.getId());
+
                     return ResponseEntity.ok(toDto(d));
                 })
                 .orElse(ResponseEntity.notFound().build());

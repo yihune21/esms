@@ -35,7 +35,7 @@ public class AuditLogController {
         Specification<AuditLog> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            if (severity != null) {
+            if (severity != null && !severity.isBlank() ) {
                 predicates.add(cb.equal(root.get("severity"), severity));
             }
             if (workspaceId != null) {

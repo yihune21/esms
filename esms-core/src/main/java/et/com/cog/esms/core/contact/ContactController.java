@@ -1,5 +1,6 @@
 package et.com.cog.esms.core.contact;
 
+import et.com.cog.esms.core.audit.AuditService;
 import et.com.cog.esms.core.security.WorkspaceContext;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -24,6 +25,7 @@ import java.util.stream.Collectors;
 public class ContactController {
 
     private final ContactRepository contactRepo;
+    private final AuditService auditService;
 
     @GetMapping
     @PreAuthorize("hasAuthority('CONTACT_VIEW')")
@@ -43,6 +45,7 @@ public class ContactController {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
 
         if (contactRepo.existsByWorkspaceIdAndPhoneE164(wsId, req.getPhoneE164())) {
+            auditService.log(wsId, "CONTACT", "WARN", "CONTACT_CREATE_DUPLICATE_PHONE", "Contact", null);
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("title", "Phone number already exists in this workspace"));
         }
@@ -57,7 +60,11 @@ public class ContactController {
                 .status("ACTIVE")
                 .build();
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(toDto(contactRepo.save(contact)));
+        Contact saved = contactRepo.save(contact);
+
+        auditService.log(wsId, "CONTACT", "INFO", "CONTACT_CREATED", "Contact", saved.getId());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(toDto(saved));
     }
 
     @GetMapping("/{id}")
@@ -72,6 +79,7 @@ public class ContactController {
     @PreAuthorize("hasAuthority('CONTACT_UPDATE')")
     public ResponseEntity<?> update(@PathVariable UUID id,
                                     @RequestBody Map<String, Object> updates) {
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
         return contactRepo.findById(id)
                 .map(c -> {
                     if (updates.containsKey("name"))    c.setName((String) updates.get("name"));
@@ -82,7 +90,11 @@ public class ContactController {
                         Map<String, String> newExtra = (Map<String, String>) updates.get("extra");
                         c.setExtra(newExtra);
                     }
-                    return ResponseEntity.ok(toDto(contactRepo.save(c)));
+                    Contact saved = contactRepo.save(c);
+
+                    auditService.log(wsId, "CONTACT", "INFO", "CONTACT_UPDATED", "Contact", saved.getId());
+
+                    return ResponseEntity.ok(toDto(saved));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -91,9 +103,14 @@ public class ContactController {
     @PreAuthorize("hasAuthority('CONTACT_DELETE')")
     @Transactional
     public ResponseEntity<ContactDto> deactivate(@PathVariable UUID id) {
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
         return contactRepo.findById(id).map(c -> {
             c.setStatus("INACTIVE");
-            return ResponseEntity.ok(toDto(contactRepo.save(c)));
+            Contact saved = contactRepo.save(c);
+
+            auditService.log(wsId, "CONTACT", "INFO", "CONTACT_DEACTIVATED", "Contact", saved.getId());
+
+            return ResponseEntity.ok(toDto(saved));
         }).orElse(ResponseEntity.notFound().build());
     }
 
@@ -101,9 +118,14 @@ public class ContactController {
     @PreAuthorize("hasAuthority('CONTACT_UPDATE')")
     @Transactional
     public ResponseEntity<ContactDto> activate(@PathVariable UUID id) {
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
         return contactRepo.findById(id).map(c -> {
             c.setStatus("ACTIVE");
-            return ResponseEntity.ok(toDto(contactRepo.save(c)));
+            Contact saved = contactRepo.save(c);
+
+            auditService.log(wsId, "CONTACT", "INFO", "CONTACT_ACTIVATED", "Contact", saved.getId());
+
+            return ResponseEntity.ok(toDto(saved));
         }).orElse(ResponseEntity.notFound().build());
     }
 

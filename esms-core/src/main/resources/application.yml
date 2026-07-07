@@ -133,3 +133,4 @@ logging:
     et.com.cog.esms: DEBUG
     org.springframework.security: WARN
     org.hibernate.SQL: WARN
+    org.hibernate.orm.jdbc.bind: TRACE

@@ -8,6 +8,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import et.com.cog.esms.core.audit.AuditService;
+import et.com.cog.esms.core.security.WorkspaceContext;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 
@@ -25,6 +27,7 @@ public class UserController {
     private final UserRepository userRepo;
     private final PasswordEncoder passwordEncoder;
     private final WorkspaceMemberRepository memberRepo;
+    private final AuditService auditService;
 
     @GetMapping
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_MEMBER_ADD')")
@@ -48,6 +51,8 @@ public class UserController {
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_MEMBER_ADD')")
     public ResponseEntity<?> create(@Valid @RequestBody CreateUserRequest req) {
         if (userRepo.existsByUsername(req.getUsername())) {
+            auditService.log(WorkspaceContext.currentWorkspaceId(), "ADMIN", "WARN",
+                    "USER_CREATE_DUPLICATE_USERNAME", "User", null);
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("title", "Username already exists"));
         }
@@ -61,7 +66,12 @@ public class UserController {
                 .failedLogins((short) 0)
                 .build();
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(toDto(userRepo.save(user)));
+        AppUser saved = userRepo.save(user);
+
+        auditService.log(WorkspaceContext.currentWorkspaceId(), "ADMIN", "INFO",
+                "USER_CREATED", "User", saved.getId());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(toDto(saved));
     }
 
     @PatchMapping("/{id}")
@@ -72,10 +82,22 @@ public class UserController {
                 .map(u -> {
                     if (updates.containsKey("displayName")) u.setDisplayName((String) updates.get("displayName"));
                     if (updates.containsKey("email")) u.setEmail((String) updates.get("email"));
-                    if (updates.containsKey("password")) {
+
+                    boolean passwordChanged = updates.containsKey("password");
+                    if (passwordChanged) {
                         u.setPasswordHash(passwordEncoder.encode((String) updates.get("password")));
                     }
-                    return ResponseEntity.ok(toDto(userRepo.save(u)));
+
+                    AppUser saved = userRepo.save(u);
+
+                    auditService.log(WorkspaceContext.currentWorkspaceId(), "ADMIN", "INFO",
+                            "USER_UPDATED", "User", saved.getId());
+                    if (passwordChanged) {
+                        auditService.log(WorkspaceContext.currentWorkspaceId(), "ADMIN", "WARN",
+                                "USER_PASSWORD_RESET_BY_ADMIN", "User", saved.getId());
+                    }
+
+                    return ResponseEntity.ok(toDto(saved));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -90,8 +112,12 @@ public class UserController {
                                 .<UserDto>body(null);
                     }
                     u.setStatus("DISABLED");
-                    log.info("User deactivated: id={}, username={}", id, u.getUsername());
-                    return ResponseEntity.ok(toDto(userRepo.save(u)));
+                    AppUser saved = userRepo.save(u);
+
+                    auditService.log(WorkspaceContext.currentWorkspaceId(), "ADMIN", "WARN",
+                            "USER_DEACTIVATED", "User", saved.getId());
+
+                    return ResponseEntity.ok(toDto(saved));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -108,8 +134,12 @@ public class UserController {
                     u.setStatus("ACTIVE");
                     u.setFailedLogins((short) 0);
                     u.setLockedUntil(null);
-                    log.info("User activated: id={}, username={}", id, u.getUsername());
-                    return ResponseEntity.ok(toDto(userRepo.save(u)));
+                    AppUser saved = userRepo.save(u);
+
+                    auditService.log(WorkspaceContext.currentWorkspaceId(), "ADMIN", "INFO",
+                            "USER_ACTIVATED", "User", saved.getId());
+
+                    return ResponseEntity.ok(toDto(saved));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

@@ -1,5 +1,6 @@
 package et.com.cog.esms.core.campaign;
 
+import et.com.cog.esms.core.audit.AuditService;
 import et.com.cog.esms.core.messaging.MessageRepository;
 import et.com.cog.esms.core.security.WorkspaceContext;
 import jakarta.validation.Valid;
@@ -27,6 +28,7 @@ public class CampaignController {
     private final CampaignRepository campaignRepo;
     private final et.com.cog.esms.core.identity.UserRepository userRepo;
     private final MessageRepository messageRepo;
+    private final AuditService auditService;
 
     @GetMapping
     @PreAuthorize("hasAuthority('CAMPAIGN_VIEW')")
@@ -53,8 +55,12 @@ public class CampaignController {
             Campaign c = campaignService.create(wsId, req.getName(), req.getKind(),
                     req.getTemplateId(), req.getRecipientGroupId(), req.getUploadId(),
                     req.getCustomBody(), req.getScheduledAt());
+
+            auditService.log(wsId, "CAMPAIGN", "INFO", "CAMPAIGN_CREATED", "Campaign", c.getId());
+
             return ResponseEntity.status(HttpStatus.CREATED).body(toDto(c));
         } catch (IllegalArgumentException e) {
+            auditService.log(wsId, "CAMPAIGN", "WARN", "CAMPAIGN_CREATE_REJECTED", "Campaign", null);
             return ResponseEntity.badRequest().body(Map.of("title", e.getMessage()));
         }
     }
@@ -62,13 +68,20 @@ public class CampaignController {
     @PostMapping("/{id}/submit")
     @PreAuthorize("hasAuthority('CAMPAIGN_SUBMIT')")
     public ResponseEntity<?> submit(@PathVariable UUID id) {
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
         try {
             UUID actorId = WorkspaceContext.currentUserId();
-            return ResponseEntity.ok(toDto(campaignService.submit(id, actorId)));
+            Campaign c = campaignService.submit(id, actorId);
+
+            auditService.log(wsId, "CAMPAIGN", "INFO", "CAMPAIGN_SUBMITTED", "Campaign", id);
+
+            return ResponseEntity.ok(toDto(c));
         } catch (IllegalStateException e) {
+            auditService.log(wsId, "CAMPAIGN", "WARN", "CAMPAIGN_SUBMIT_REJECTED_STATE", "Campaign", id);
             return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
                     .body(Map.of("title", e.getMessage()));
         } catch (IllegalArgumentException e) {
+            auditService.log(wsId, "CAMPAIGN", "WARN", "CAMPAIGN_SUBMIT_REJECTED_INVALID", "Campaign", id);
             return ResponseEntity.badRequest().body(Map.of("title", e.getMessage()));
         }
     }
@@ -77,6 +90,8 @@ public class CampaignController {
     @PreAuthorize("hasAnyAuthority('CAMPAIGN_APPROVE', 'CAMPAIGN_APPROVE_CEO')")
     public ResponseEntity<CampaignDto> approve(@PathVariable UUID id,
                                                 @RequestBody(required = false) NoteRequest note) {
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
+
         // Fix 5: gate CEO-tier approval on the CAMPAIGN_APPROVE_CEO permission
         Campaign campaign = campaignRepo.findById(id).orElse(null);
         if (campaign == null) {
@@ -91,18 +106,28 @@ public class CampaignController {
                 .anyMatch(a -> a.getAuthority().equals("CAMPAIGN_APPROVE"));
 
         if (isCeoStage && !hasCeoPermission) {
+            auditService.log(wsId, "CAMPAIGN", "CRITICAL",
+                    "CAMPAIGN_APPROVE_DENIED_CEO_TIER", "Campaign", id);
             return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
                     .body(null);
         }
         if (!isCeoStage && !hasHeadPermission) {
+            auditService.log(wsId, "CAMPAIGN", "WARN",
+                    "CAMPAIGN_APPROVE_DENIED", "Campaign", id);
             return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
                     .body(null);
         }
 
         String n = note != null ? note.getNote() : null;
         try {
-            return ResponseEntity.ok(toDto(campaignService.approve(id, n)));
+            Campaign approved = campaignService.approve(id, n);
+
+            auditService.log(wsId, "CAMPAIGN", "INFO",
+                    isCeoStage ? "CAMPAIGN_APPROVED_CEO" : "CAMPAIGN_APPROVED", "Campaign", id);
+
+            return ResponseEntity.ok(toDto(approved));
         } catch (IllegalStateException e) {
+            auditService.log(wsId, "CAMPAIGN", "WARN", "CAMPAIGN_APPROVE_REJECTED_STATE", "Campaign", id);
             return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
                     .body(null);
         }
@@ -112,17 +137,26 @@ public class CampaignController {
     @PreAuthorize("hasAuthority('CAMPAIGN_APPROVE')")
     public ResponseEntity<CampaignDto> reject(@PathVariable UUID id,
                                                @Valid @RequestBody NoteRequest note) {
-        return ResponseEntity.ok(toDto(campaignService.reject(id, note.getNote())));
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
+        Campaign rejected = campaignService.reject(id, note.getNote());
+
+        auditService.log(wsId, "CAMPAIGN", "WARN", "CAMPAIGN_REJECTED", "Campaign", id);
+
+        return ResponseEntity.ok(toDto(rejected));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('CAMPAIGN_DRAFT')")
     public ResponseEntity<CampaignDto> update(@PathVariable UUID id,
                                                @RequestBody UpdateCampaignRequest req) {
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
         Campaign c = campaignService.update(id,
                 req.getName(), req.getKind(),
                 req.getTemplateId(), req.getRecipientGroupId(), req.getUploadId(),
                 req.getCustomBody(), req.getScheduledAt());
+
+        auditService.log(wsId, "CAMPAIGN", "INFO", "CAMPAIGN_UPDATED", "Campaign", id);
+
         return ResponseEntity.ok(toDto(c));
     }
 
@@ -130,12 +164,19 @@ public class CampaignController {
     @PreAuthorize("hasAuthority('CAMPAIGN_CANCEL')")
     public ResponseEntity<?> cancel(@PathVariable UUID id,
                                                @RequestBody(required = false) NoteRequest note) {
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
         try {
             String n = note != null ? note.getNote() : null;
-            return ResponseEntity.ok(toDto(campaignService.cancel(id, n)));
+            Campaign cancelled = campaignService.cancel(id, n);
+
+            auditService.log(wsId, "CAMPAIGN", "WARN", "CAMPAIGN_CANCELLED", "Campaign", id);
+
+            return ResponseEntity.ok(toDto(cancelled));
         } catch (IllegalStateException e) {
+            auditService.log(wsId, "CAMPAIGN", "WARN", "CAMPAIGN_CANCEL_REJECTED_STATE", "Campaign", id);
             return ResponseEntity.badRequest().body(Map.of("title", e.getMessage()));
         } catch (IllegalArgumentException e) {
+            auditService.log(wsId, "CAMPAIGN", "WARN", "CAMPAIGN_CANCEL_REJECTED_INVALID", "Campaign", id);
             return ResponseEntity.badRequest().body(Map.of("title", e.getMessage()));
         }
     }
@@ -144,7 +185,6 @@ public class CampaignController {
         String creatorName = c.getCreatedBy() != null ? userRepo.findById(c.getCreatedBy())
                 .map(et.com.cog.esms.core.identity.AppUser::getDisplayName).orElse(null) : null;
 
-        // Per-campaign delivery stats
         long delivered  = messageRepo.countByCampaignIdAndStatusIn(c.getId(), List.of("DELIVERED"));
         long failed     = messageRepo.countByCampaignIdAndStatusIn(c.getId(), List.of("FAILED"));
         long sent       = messageRepo.countByCampaignIdAndStatusIn(c.getId(), List.of("SENT"));
@@ -165,11 +205,9 @@ public class CampaignController {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"));
 
         if (isSuperAdmin && overrideWsId != null) {
-            // "00000000-0000-0000-0000-000000000000" sentinel means "all workspaces"
             return "00000000-0000-0000-0000-000000000000".equals(overrideWsId.toString()) ? null : overrideWsId;
         }
         if (isSuperAdmin) {
-            // Fix #3: Super admin with no ?workspaceId= sees ALL campaigns across departments
             return null;
         }
         return WorkspaceContext.currentWorkspaceId();
@@ -178,7 +216,6 @@ public class CampaignController {
     @Data
     public static class UpdateCampaignRequest {
         private String  name;
-        /** INSTANT | SCHEDULED */
         @Pattern(regexp = "INSTANT|SCHEDULED",
                  message = "kind must be one of: INSTANT, SCHEDULED")
         private String  kind;
@@ -192,7 +229,6 @@ public class CampaignController {
     @Data
     public static class CreateCampaignRequest {
         @NotBlank private String name;
-        /** INSTANT | SCHEDULED */
         @NotBlank
         @Pattern(regexp = "INSTANT|SCHEDULED",
                  message = "kind must be one of: INSTANT, SCHEDULED")
@@ -213,7 +249,6 @@ public class CampaignController {
     public static class CampaignDto {
         private UUID    id;
         private String  name;
-        /** INSTANT | SCHEDULED */
         private String  kind;
         private String  status;
         private UUID    templateId;
@@ -226,7 +261,6 @@ public class CampaignController {
         private String  creatorName;
         private Instant createdAt;
         private UUID    workspaceId;
-        // ── inline delivery stats ──
         private long    totalMessages;
         private long    deliveredMessages;
         private long    failedMessages;

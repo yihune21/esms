@@ -18,7 +18,8 @@ public class AuditLog {
 
     @Column(name = "workspace_id")
     private UUID workspaceId;
-
+    
+    @Column(name = "seq", insertable = false, updatable = false)
     private Long seq;
 
     @Column(name = "actor_user_id")

@@ -1,5 +1,6 @@
 package et.com.cog.esms.core.reminder;
 
+import et.com.cog.esms.core.audit.AuditService;
 import et.com.cog.esms.core.security.WorkspaceContext;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -25,6 +26,7 @@ import java.util.stream.Collectors;
 public class ReminderController {
 
     private final ReminderService reminderService;
+    private final AuditService auditService;
 
     
     @PostMapping
@@ -32,6 +34,8 @@ public class ReminderController {
     public ResponseEntity<?> create(@Valid @RequestBody CreateReminderRequest req) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
         if (wsId == null) {
+            auditService.log(null, "REMINDER", "WARN",
+                            "REMINDER_CREATE_BAD_REQUEST", "Reminder", null);
             return ResponseEntity.badRequest()
                     .body(java.util.Map.of("title", "No workspace context — select a workspace before managing reminders"));
         }
@@ -44,6 +48,10 @@ public class ReminderController {
                 req.getCustomBody(),
                 req.getKind(),
                 req.getTriggerDays());
+        
+        auditService.log(wsId, "REMINDER", "INFO",
+                            "REMINDER_CREATE_SUCCESS", "Reminder", r.getId());
+           
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(r));
     }
 
@@ -53,10 +61,16 @@ public class ReminderController {
                                                @RequestBody java.util.Map<String, Object> updates) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
         if (wsId == null) {
+            auditService.log(null, "REMINDER", "WARN",
+                            "REMINDER_UPDATE_BAD_REQUEST", "Reminder", null);
+           
             return ResponseEntity.badRequest()
                     .body(java.util.Map.of("title", "No workspace context — select a workspace before managing reminders"));
         }
         Reminder r = reminderService.update(wsId, id, updates);
+        auditService.log(wsId, "REMINDER", "INFO",
+                            "REMINDER_UPDATE_SUCCESS", "Reminder",r.getId());
+           
         return ResponseEntity.ok(toDto(r));
     }
 
@@ -95,9 +109,15 @@ public class ReminderController {
     public ResponseEntity<?> deactivate(@PathVariable UUID id) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
         if (wsId == null) {
+            auditService.log(null, "REMINDER", "WARN",
+                            "REMINDER_DEACTIVATE_BAD_REQUEST", "Reminder", null);
+           
             return ResponseEntity.badRequest()
                     .body(java.util.Map.of("title", "No workspace context"));
         }
+        auditService.log(wsId, "REMINDER", "INFO",
+                            "REMINDER_DEACTIVATED", "Reminder",id);
+           
         return ResponseEntity.ok(toDto(reminderService.deactivate(wsId, id)));
     }
 
@@ -106,9 +126,15 @@ public class ReminderController {
     public ResponseEntity<?> activate(@PathVariable UUID id) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
         if (wsId == null) {
+            auditService.log(null, "REMINDER", "WARN",
+                            "REMINDER_ACTIVATE_BAD_REQUEST", "Reminder", null);
+           
             return ResponseEntity.badRequest()
                     .body(java.util.Map.of("title", "No workspace context"));
         }
+        auditService.log(wsId, "REMINDER", "INFO",
+                            "REMINDER_ACTIVATED", "Reminder",id);
+           
         return ResponseEntity.ok(toDto(reminderService.activate(wsId, id)));
     }
 
@@ -118,10 +144,16 @@ public class ReminderController {
     public ResponseEntity<?> triggerNow(@PathVariable UUID id) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
         if (wsId == null) {
+            auditService.log(null, "REMINDER", "WARN",
+                            "REMINDER_TRIGGER_BAD_REQUEST", "Reminder", null);
+           
             return ResponseEntity.badRequest()
                     .body(java.util.Map.of("title", "No workspace context"));
         }
         reminderService.triggerNow(wsId, id);
+        auditService.log(wsId, "REMINDER", "WARN",
+                            "REMINDER_TRIGGERED", "Reminder", id);
+           
         return ResponseEntity.accepted().build();
     }
 

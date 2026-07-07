@@ -1,5 +1,7 @@
 package et.com.cog.esms.core.template;
 
+import et.com.cog.esms.core.audit.AuditService;
+import et.com.cog.esms.core.identity.UserRepository;
 import et.com.cog.esms.core.security.WorkspaceContext;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -25,7 +27,8 @@ public class TemplateController {
 
     private final TemplateRepository            templateRepo;
     private final TemplateRecipientRepository   recipientRepo;
-    private final et.com.cog.esms.core.identity.UserRepository userRepo;
+    private final UserRepository userRepo;
+    private final AuditService   auditService;
 
     @GetMapping
     @PreAuthorize("hasAuthority('TEMPLATE_VIEW')")
@@ -55,12 +58,18 @@ public class TemplateController {
     @Transactional
     public ResponseEntity<?> create(@Valid @RequestBody CreateTemplateRequest req) {
         if (req.getRecipientGroupId() == null && (req.getRecipients() == null || req.getRecipients().isEmpty())) {
+            auditService.log(null, "TEMPLATE", "WARN",
+                            "TEMPLATE_CREATE_BAD_REQUEST", "TEMPLATE", null);
+           
             return ResponseEntity.badRequest().body(Map.of("title", "A template must have at least one recipient (either recipientGroupId or an inline recipient list)"));
         }
 
         UUID wsId = WorkspaceContext.currentWorkspaceId();
 
         if (templateRepo.existsByWorkspaceIdAndName(wsId, req.getName())) {
+            auditService.log(null, "TEMPLATE", "WARN",
+                            "TEMPLATE_NAME_DUPLICATED", "TEMPLATE", null);
+           
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("title", "A template with that name already exists in this workspace"));
         }
@@ -83,7 +92,9 @@ public class TemplateController {
         if (req.getRecipients() != null && !req.getRecipients().isEmpty()) {
             persistRecipients(saved.getId(), req.getRecipients());
         }
-
+        auditService.log(wsId, "TEMPLATE", "INFO",
+                            "TEMPLATE_CREATED", "TEMPLATE",saved.getId());
+           
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(saved));
     }
 
@@ -126,6 +137,12 @@ public class TemplateController {
                         List<String> vars = (List<String>) updates.get("variables");
                         t.setVariables(vars);
                     }
+                    
+                    Template saved  = templateRepo.save(t);
+
+                    auditService.log(WorkspaceContext.currentWorkspaceId(), "TEMPLATE", "INFO",
+                            "TEMPLATE_UPDATED", "TEMPLATE", saved.getId());
+           
                     return ResponseEntity.ok(toDto(templateRepo.save(t)));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -154,6 +171,12 @@ public class TemplateController {
                     t.setStatus("APPROVED");
                     t.setApprovedBy(actorId);
                     t.setApprovedAt(Instant.now());
+                    
+                    Template saved  = templateRepo.save(t);
+
+                    auditService.log(WorkspaceContext.currentWorkspaceId(), "TEMPLATE", "INFO",
+                            "TEMPLATE_APPROVED", "TEMPLATE",saved.getId());
+           
                     return ResponseEntity.ok(toDto(templateRepo.save(t)));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -170,6 +193,12 @@ public class TemplateController {
                     }
                     t.setStatus("REJECTED");
                     t.setRejectionReason(payload.get("rejectionReason"));
+
+                    Template saved  = templateRepo.save(t);
+
+                    auditService.log(WorkspaceContext.currentWorkspaceId(), "TEMPLATE", "INFO",
+                            "TEMPLATE_REJECTED", "TEMPLATE",saved.getId());
+           
                     return ResponseEntity.ok(toDto(templateRepo.save(t)));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -185,6 +214,10 @@ public class TemplateController {
                                 .body(Map.of("title", "Template is already retired"));
                     }
                     t.setStatus("RETIRED");
+                    Template saved  = templateRepo.save(t);
+                    auditService.log(WorkspaceContext.currentWorkspaceId(), "TEMPLATE", "INFO",
+                            "TEMPLATE_RETIRED", "TEMPLATE",saved.getId());
+           
                     return ResponseEntity.ok(toDto(templateRepo.save(t)));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -201,6 +234,12 @@ public class TemplateController {
                     }
                     t.setStatus("DRAFT");
                     t.setRejectionReason(null);
+
+                    Template saved  = templateRepo.save(t);
+                    auditService.log(WorkspaceContext.currentWorkspaceId(), "TEMPLATE", "INFO",
+                            "TEMPLATE_REACTIVATED", "TEMPLATE",saved.getId());
+           
+
                     return ResponseEntity.ok(toDto(templateRepo.save(t)));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -235,6 +274,9 @@ public class TemplateController {
                             .stream()
                             .map(r -> new RecipientDto(r.getId(), r.getPhoneE164(), r.getName()))
                             .collect(Collectors.toList());
+                    auditService.log(WorkspaceContext.currentWorkspaceId(), "TEMPLATE", "INFO",
+                            "TEMPLATE_RECIPIENTS_CREATED", "TEMPLATE_RECIPIENT",id);
+           
                     return ResponseEntity.status(HttpStatus.CREATED).body(list);
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -258,6 +300,9 @@ public class TemplateController {
                         }
                     }
                     recipientRepo.deleteByTemplateIdAndPhoneE164(id, phone);
+                    auditService.log(WorkspaceContext.currentWorkspaceId(), "TEMPLATE", "INFO",
+                            "TEMPLATE_RECIPIENT_DELETED", "TEMPLATE_RECIPIENT",t.getId());
+           
                     return ResponseEntity.noContent().build();
                 })
                 .orElse(ResponseEntity.notFound().build());

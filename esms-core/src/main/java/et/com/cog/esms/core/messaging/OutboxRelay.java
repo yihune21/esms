@@ -1,6 +1,5 @@
 package et.com.cog.esms.core.messaging;
 
-// import com.fasterxml.jackson.databind.ObjectMapper;
 import et.com.cog.esms.common.constants.QueueConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -1,5 +1,6 @@
 package et.com.cog.esms.core.contact;
 
+import et.com.cog.esms.core.audit.AuditService;
 import et.com.cog.esms.core.identity.UserRepository;
 import et.com.cog.esms.core.security.WorkspaceContext;
 import jakarta.validation.Valid;
@@ -33,6 +34,7 @@ public class ContactGroupController {
     private final ContactUploadRepository     uploadRepo;
     private final ExcelUploadService          excelUploadService;
     private final UserRepository              userRepo;
+    private final AuditService                auditService;
 
     @GetMapping
     @PreAuthorize("hasAuthority('CONTACT_VIEW')")
@@ -51,6 +53,7 @@ public class ContactGroupController {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
 
         if (groupRepo.existsByWorkspaceIdAndName(wsId, req.getName())) {
+            auditService.log(wsId, "GROUP", "WARN", "GROUP_CREATE_DUPLICATE_NAME", "ContactGroup", null);
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("title", "A group with that name already exists in this workspace"));
         }
@@ -60,7 +63,9 @@ public class ContactGroupController {
                 .name(req.getName())
                 .description(req.getDescription())
                 .build();
-
+        
+        ContactGroup saved = groupRepo.save(group);
+        auditService.log(wsId, "GROUP", "INFO", "GROUP_CREATED", "ContactGroup", saved.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(groupRepo.save(group)));
     }
 
@@ -76,10 +81,15 @@ public class ContactGroupController {
     @PreAuthorize("hasAuthority('CONTACT_UPDATE')")
     public ResponseEntity<?> update(@PathVariable UUID id,
                                     @RequestBody Map<String, Object> updates) {
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
         return groupRepo.findById(id)
                 .map(g -> {
                     if (updates.containsKey("name"))        g.setName((String) updates.get("name"));
                     if (updates.containsKey("description")) g.setDescription((String) updates.get("description"));
+                    
+                    ContactGroup saved = groupRepo.save(g);
+                    
+                    auditService.log(wsId, "GROUP", "INFO", "GROUP_UPDATED", "ContactGroup", saved.getId());
                     return ResponseEntity.ok(toDto(groupRepo.save(g)));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -89,8 +99,13 @@ public class ContactGroupController {
     @PreAuthorize("hasAuthority('CONTACT_DELETE')")
     @Transactional
     public ResponseEntity<GroupDto> deactivate(@PathVariable UUID id) {
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
         return groupRepo.findById(id).map(g -> {
             g.setStatus("INACTIVE");
+
+            ContactGroup saved = groupRepo.save(g);
+            auditService.log(wsId, "GROUP", "INFO", "GROUP_DEACTIVATED", "ContactGroup", saved.getId());
+
             return ResponseEntity.ok(toDto(groupRepo.save(g)));
         }).orElse(ResponseEntity.notFound().build());
     }
@@ -99,8 +114,11 @@ public class ContactGroupController {
     @PreAuthorize("hasAuthority('CONTACT_UPDATE')")
     @Transactional
     public ResponseEntity<GroupDto> activate(@PathVariable UUID id) {
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
         return groupRepo.findById(id).map(g -> {
-            g.setStatus("ACTIVE");
+            g.setStatus("ACTIVE"); 
+            ContactGroup saved = groupRepo.save(g);
+            auditService.log(wsId, "GROUP", "INFO", "GROUP_ACTIVATED", "ContactGroup", saved.getId());
             return ResponseEntity.ok(toDto(groupRepo.save(g)));
         }).orElse(ResponseEntity.notFound().build());
     }
@@ -135,6 +153,8 @@ public class ContactGroupController {
     @PreAuthorize("hasAuthority('CONTACT_UPDATE')")
     public ResponseEntity<?> addMember(@PathVariable UUID id,
                                        @Valid @RequestBody AddMemberRequest req) {
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
+
         if (!groupRepo.existsById(id)) {
             return ResponseEntity.badRequest().body(Map.of("title", "Group not found"));
         }
@@ -151,6 +171,8 @@ public class ContactGroupController {
                 .contactId(req.getContactId())
                 .build());
 
+        auditService.log(wsId, "CONTACT", "INFO", "GROUP_MEMBER_ADDED", "ContactGroup", id);
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(Map.of("message", "Contact added to group"));
     }
@@ -160,10 +182,15 @@ public class ContactGroupController {
     @Transactional
     public ResponseEntity<Void> removeMember(@PathVariable UUID id,
                                              @PathVariable UUID contactId) {
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
+
         if (!memberRepo.existsByGroupIdAndContactId(id, contactId)) {
             return ResponseEntity.notFound().build();
         }
         memberRepo.deleteByGroupIdAndContactId(id, contactId);
+
+        auditService.log(wsId, "CONTACT", "INFO", "GROUP_MEMBER_REMOVED", "ContactGroup", id);
+
         return ResponseEntity.noContent().build();
     }
 
@@ -186,6 +213,7 @@ public class ContactGroupController {
         ContactUpload upload = excelUploadService.parseAndImport(wsId, userId, file, id);
 
         if ("FAILED".equals(upload.getStatus())) {
+            auditService.log(wsId, "CONTACT", "WARN", "GROUP_UPLOAD_FAILED", "ContactUpload", upload.getId());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(upload);
         }
 
@@ -199,6 +227,8 @@ public class ContactGroupController {
                 groupRepo.save(group);
             });
         }
+
+        auditService.log(wsId, "CONTACT", "INFO", "GROUP_UPLOAD_COMPLETED", "ContactUpload", upload.getId());
 
         return ResponseEntity.ok(upload);
     }
@@ -217,8 +247,11 @@ public class ContactGroupController {
         ContactUpload upload = excelUploadService.parseAndImport(wsId, userId, file, null);
 
         if ("FAILED".equals(upload.getStatus())) {
+            auditService.log(wsId, "CONTACT", "WARN", "STANDALONE_UPLOAD_FAILED", "ContactUpload", upload.getId());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(upload);
         }
+
+        auditService.log(wsId, "CONTACT", "INFO", "STANDALONE_UPLOAD_COMPLETED", "ContactUpload", upload.getId());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(upload);
     }
@@ -249,7 +282,10 @@ public class ContactGroupController {
     @GetMapping("/{id}/members/export")
     @PreAuthorize("hasAuthority('CONTACT_VIEW')")
     public ResponseEntity<byte[]> exportMembers(@PathVariable UUID id) {
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
+        UUID userId = WorkspaceContext.currentUserId();
         if (!groupRepo.existsById(id)) {
+            auditService.log(wsId, "CONTACT", "WARN", "GROUP_NOT_FOUND", "ContactGroup", userId);
             return ResponseEntity.notFound().build();
         }
 
@@ -270,6 +306,7 @@ public class ContactGroupController {
                 .collect(Collectors.toList());
 
         if (rows.isEmpty()) {
+            auditService.log(wsId, "CONTACT", "WARN", "GROUP_ROWS_EMPTY", "ContactGroup", userId);
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"group_members.csv\"")
                     .contentType(MediaType.parseMediaType("text/csv"))
@@ -297,7 +334,8 @@ public class ContactGroupController {
 
         groupRepo.findById(id).ifPresent(g ->
                 log.info("Exported {} members from group '{}' ({})", rows.size(), g.getName(), id));
-
+        
+        auditService.log(wsId, "CONTACT", "WARN", "GROUP_EXPORTED", "ContactGroup", userId);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"group_" + id + "_members.csv\"")
