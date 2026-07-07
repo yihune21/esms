@@ -46,6 +46,16 @@ public class ContactRowSaver {
         return contact;
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void linkToGroupIfMissing(UUID groupId, UUID contactId) {
+        if (!memberRepo.existsByGroupIdAndContactId(groupId, contactId)) {
+            memberRepo.save(ContactGroupMember.builder()
+                    .groupId(groupId)
+                    .contactId(contactId)
+                    .build());
+        }
+    }
+
 
     
 }

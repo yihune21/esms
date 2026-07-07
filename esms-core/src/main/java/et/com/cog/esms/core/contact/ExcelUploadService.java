@@ -121,8 +121,20 @@ public class ExcelUploadService {
                     }
                     seenPhonesInBatch.add(phone);
 
-                    if (contactRepo.existsByWorkspaceIdAndPhoneE164(workspaceId, phone)) {
+                    Optional<Contact> existingContact = contactRepo.findByWorkspaceIdAndPhoneE164(workspaceId, phone);
+
+                    if (existingContact.isPresent()) {
                         duplicateCount++;
+                        if (groupId != null) {
+                            try {
+                                rowSaver.linkToGroupIfMissing(groupId, existingContact.get().getId());
+                            } catch (Exception e) {
+                                errorCount++;
+                                errors.add(Map.of("row", rowIdx + 1,
+                                        "error", "Failed to link existing contact to group: " + e.getMessage()));
+                                log.warn("Row {} failed to link duplicate contact to group: {}", rowIdx + 1, e.getMessage());
+                            }
+                        }
                         continue;
                     }
 
@@ -136,8 +148,6 @@ public class ExcelUploadService {
                         }
                     }
 
-                    // Each row commits/rolls back independently (REQUIRES_NEW),
-                    // so one bad row can never poison the rest of the batch.
                     rowSaver.saveContactRow(workspaceId, name, phone, extra, upload.getId(), groupId);
                     importedCount++;
 
