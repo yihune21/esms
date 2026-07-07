@@ -44,6 +44,7 @@ et/com/cog/esms/core/identity/UserActivityLogRepository$ActionFrequencyPoint.cla
 et/com/cog/esms/core/identity/AuthController$LoginRequest.class
 et/com/cog/esms/core/campaign/ApprovalRepository.class
 et/com/cog/esms/core/reporting/ReportExport$ReportExportBuilder.class
+et/com/cog/esms/core/contact/ContactRowSaver.class
 et/com/cog/esms/core/workspace/RoleRepository.class
 et/com/cog/esms/core/reporting/ReportExportEvent.class
 et/com/cog/esms/core/contact/Contact$ContactBuilder.class

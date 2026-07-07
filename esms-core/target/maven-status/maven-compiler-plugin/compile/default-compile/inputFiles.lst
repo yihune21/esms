@@ -26,6 +26,7 @@
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/contact/ContactGroupMemberRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/contact/ContactGroupRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/contact/ContactRepository.java
+/home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/contact/ContactRowSaver.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/contact/ContactUpload.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/contact/ContactUploadRepository.java
 /home/noone/Desktop/projects/esms/esms-core/src/main/java/et/com/cog/esms/core/contact/ExcelUploadService.java

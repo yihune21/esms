@@ -5,7 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
@@ -21,16 +20,21 @@ public class ExcelUploadService {
     private final ContactRepository contactRepo;
     private final ContactUploadRepository uploadRepo;
     private final ContactGroupMemberRepository memberRepo;
+    private final ContactRowSaver rowSaver;
 
 
-    @Transactional
     public ContactUpload parseAndImport(UUID workspaceId, UUID uploadedBy,
                                          MultipartFile file, UUID groupId) {
+        
+        String contentType = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
+        if (contentType.length() > 255) {
+            contentType = contentType.substring(0, 255);
+        }
         ContactUpload upload = ContactUpload.builder()
                 .workspaceId(workspaceId)
                 .originalName(file.getOriginalFilename())
                 .fileSize(file.getSize())
-                .contentType(file.getContentType() != null ? file.getContentType() : "application/octet-stream")
+                .contentType(contentType)
                 .groupId(groupId)
                 .status("DRAFT")
                 .uploadedBy(uploadedBy)
@@ -99,6 +103,18 @@ public class ExcelUploadService {
                         continue;
                     }
 
+                    if (name.length() > 255) {
+                        errorCount++;
+                        errors.add(Map.of("row", rowIdx + 1, "error", "Name exceeds maximum length (255 characters)"));
+                        continue;
+                    }
+
+                    if (phone.length() > 20) {
+                        errorCount++;
+                        errors.add(Map.of("row", rowIdx + 1, "error", "Phone number exceeds maximum length"));
+                        continue;
+                    }
+
                     if (seenPhonesInBatch.contains(phone)) {
                         duplicateCount++;
                         continue;
@@ -107,17 +123,6 @@ public class ExcelUploadService {
 
                     if (contactRepo.existsByWorkspaceIdAndPhoneE164(workspaceId, phone)) {
                         duplicateCount++;
-                        if (groupId != null) {
-                            contactRepo.findByWorkspaceIdAndPhoneE164(workspaceId, phone)
-                                    .ifPresent(existing -> {
-                                        if (!memberRepo.existsByGroupIdAndContactId(groupId, existing.getId())) {
-                                            memberRepo.save(ContactGroupMember.builder()
-                                                    .groupId(groupId)
-                                                    .contactId(existing.getId())
-                                                    .build());
-                                        }
-                                    });
-                        }
                         continue;
                     }
 
@@ -131,30 +136,15 @@ public class ExcelUploadService {
                         }
                     }
 
-                    Contact contact = Contact.builder()
-                            .workspaceId(workspaceId)
-                            .name(name)
-                            .phoneE164(phone)
-                            .extra(extra)
-                            .uploadId(upload.getId())
-                            .optOut(false)
-                            .status("ACTIVE")
-                            .build();
-                    contact = contactRepo.save(contact);
-
-                    if (groupId != null) {
-                        if (!memberRepo.existsByGroupIdAndContactId(groupId, contact.getId())) {
-                            memberRepo.save(ContactGroupMember.builder()
-                                    .groupId(groupId)
-                                    .contactId(contact.getId())
-                                    .build());
-                        }
-                    }
-
+                    // Each row commits/rolls back independently (REQUIRES_NEW),
+                    // so one bad row can never poison the rest of the batch.
+                    rowSaver.saveContactRow(workspaceId, name, phone, extra, upload.getId(), groupId);
                     importedCount++;
+
                 } catch (Exception e) {
                     errorCount++;
-                    errors.add(Map.of("row", rowIdx + 1, "error", e.getMessage()));
+                    errors.add(Map.of("row", rowIdx + 1, "error", e.getMessage() != null ? e.getMessage() : "Unknown error"));
+                    log.warn("Row {} failed to import: {}", rowIdx + 1, e.getMessage());
                 }
             }
 
