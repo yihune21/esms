@@ -177,6 +177,7 @@ public class CampaignDispatchService {
                     .aggregateId(msg.getId())
                     .eventType("SendCommand")
                     .payload(objectMapper.writeValueAsString(cmd))
+                    .createdAt(Instant.now())
                     .build();
             outboxRepo.save(sendEvent);
             recipientCount++;
@@ -264,6 +265,7 @@ public class CampaignDispatchService {
                     .aggregateId(msg.getId())
                     .eventType("SendCommand")
                     .payload(objectMapper.writeValueAsString(cmd))
+                    .createdAt(Instant.now())
                     .build();
             outboxRepo.save(sendEvent);
             recipientCount++;

@@ -96,6 +96,7 @@ public class CampaignService {
                 .customBody(customBody)
                 .scheduledAt(scheduledAt)
                 .createdBy(WorkspaceContext.currentUserId())
+                .createdAt(Instant.now())
                 .build();
         Campaign saved = campaignRepo.save(c);
         auditService.log(workspaceId, "CAMPAIGN", "INFO", "CAMPAIGN_CREATED", "Campaign", saved.getId());
@@ -184,6 +185,7 @@ public class CampaignService {
                         .aggregateId(saved.getId())
                         .eventType("ScheduledFire")
                         .payload(json)
+                        .createdAt(Instant.now())
                         .build();
                 outboxRepo.save(event);
 
@@ -290,6 +292,7 @@ public class CampaignService {
                         .aggregateId(c.getId())
                         .eventType("ScheduledFire")
                         .payload(json)
+                        .createdAt(Instant.now())
                         .build();
                 outboxRepo.save(event);
 

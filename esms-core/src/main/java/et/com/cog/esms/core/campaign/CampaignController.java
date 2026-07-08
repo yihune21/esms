@@ -92,7 +92,6 @@ public class CampaignController {
                                                 @RequestBody(required = false) NoteRequest note) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
 
-        // Fix 5: gate CEO-tier approval on the CAMPAIGN_APPROVE_CEO permission
         Campaign campaign = campaignRepo.findById(id).orElse(null);
         if (campaign == null) {
             return ResponseEntity.notFound().build();
