@@ -153,7 +153,7 @@ public class ContactController {
 
     @Data
     public static class CreateContactRequest {
-        @NotBlank private String name;
+        private String name;
         @NotBlank
         @Pattern(regexp = "^\\+[1-9]\\d{6,14}$", message = "Phone must be E.164 format, e.g. +251911000000")
         private String phoneE164;

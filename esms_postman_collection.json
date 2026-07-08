@@ -115,13 +115,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/auth/login",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "login"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
             }
           }
         },
@@ -155,13 +150,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/auth/verify-otp",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "verify-otp"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "verify-otp"]
             }
           }
         },
@@ -186,13 +176,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/auth/refresh",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "refresh"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "refresh"]
             }
           }
         },
@@ -212,13 +197,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/auth/resend-otp",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "resend-otp"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "resend-otp"]
             }
           }
         },
@@ -234,13 +214,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/auth/logout",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "logout"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
             }
           }
         },
@@ -257,13 +232,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/auth/me",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "me"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
             },
             "description": "Returns current user profile + all workspace memberships."
           },
@@ -282,13 +252,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/auth/switch-workspace",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "switch-workspace"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "switch-workspace"]
             },
             "description": "Issues a new access token scoped to the given workspace. workspaceId must be one the user belongs to.",
             "body": {
@@ -321,12 +286,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/users",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
             }
           }
         },
@@ -343,13 +304,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/users/{{userId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users",
-                "{{userId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
             }
           }
         },
@@ -375,12 +331,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/users",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
             }
           }
         },
@@ -406,13 +358,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/users/{{userId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users",
-                "{{userId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
             }
           }
         },
@@ -429,14 +376,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/users/{{userId}}/deactivate",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users",
-                "{{userId}}",
-                "deactivate"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}", "deactivate"]
             }
           }
         },
@@ -453,14 +394,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/users/{{userId}}/activate",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users",
-                "{{userId}}",
-                "activate"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}", "activate"]
             }
           }
         },
@@ -477,14 +412,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/users/{{userId}}/memberships",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users",
-                "{{userId}}",
-                "memberships"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}", "memberships"]
             },
             "description": "Lists all workspace memberships for a user (workspaceId, role, assignedAt)."
           },
@@ -507,12 +436,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/workspaces",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "workspaces"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces"]
             }
           }
         },
@@ -536,12 +461,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/workspaces",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "workspaces"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces"]
             }
           }
         },
@@ -557,13 +478,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/workspaces/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "workspaces",
-                ":id"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -599,13 +515,8 @@
             "description": "Partially update a workspace. All fields are optional.\n\n- status: ACTIVE | SUSPENDED\n- dailySmsLimit: any integer (safe for all numeric sizes)\n- adminUserId: reassigns the DEPT_HEAD role to this user\n- delegateUserId: assigns CEO role (only meaningful when DELEGATION permission is active); set to null to remove the delegate\n- permissions: replaces the full permission set for this workspace",
             "url": {
               "raw": "{{baseUrl}}/workspaces/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "workspaces",
-                ":id"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -627,14 +538,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/workspaces/:id/members",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "workspaces",
-                ":id",
-                "members"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", ":id", "members"],
               "variable": [
                 {
                   "key": "id",
@@ -664,14 +569,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/workspaces/:id/members",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "workspaces",
-                ":id",
-                "members"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", ":id", "members"],
               "variable": [
                 {
                   "key": "id",
@@ -694,14 +593,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/deactivate",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "workspaces",
-                "{{workspaceId}}",
-                "deactivate"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceId}}", "deactivate"]
             }
           }
         },
@@ -718,14 +611,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/activate",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "workspaces",
-                "{{workspaceId}}",
-                "activate"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceId}}", "activate"]
             }
           }
         },
@@ -742,15 +629,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/members/{{userId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "workspaces",
-                "{{workspaceId}}",
-                "members",
-                "{{userId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceId}}", "members", "{{userId}}"]
             },
             "description": "Removes a member from a workspace. Requires WORKSPACE_MEMBER_REMOVE authority."
           },
@@ -783,15 +663,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/members/{{userId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "workspaces",
-                "{{workspaceId}}",
-                "members",
-                "{{userId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceId}}", "members", "{{userId}}"]
             },
             "description": "Updates a workspace member's role. Requires WORKSPACE_MEMBER_ADD authority."
           },
@@ -814,12 +687,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/contacts",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "contacts"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["contacts"]
             }
           }
         },
@@ -843,12 +712,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/contacts",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "contacts"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["contacts"]
             }
           }
         },
@@ -864,13 +729,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/contacts/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "contacts",
-                ":id"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["contacts", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -900,13 +760,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/contacts/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "contacts",
-                ":id"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["contacts", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -928,14 +783,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/contacts/{{contactId}}/deactivate",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "contacts",
-                "{{contactId}}",
-                "deactivate"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["contacts", "{{contactId}}", "deactivate"],
               "variable": [
                 {
                   "key": "id",
@@ -958,14 +807,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/contacts/{{contactId}}/activate",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "contacts",
-                "{{contactId}}",
-                "activate"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["contacts", "{{contactId}}", "activate"]
             }
           }
         }
@@ -986,12 +829,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/groups",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "groups"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["groups"]
             }
           }
         },
@@ -1015,12 +854,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/groups",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "groups"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["groups"]
             }
           }
         },
@@ -1036,13 +871,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/groups/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "groups",
-                ":id"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["groups", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -1072,13 +902,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/groups/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "groups",
-                ":id"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["groups", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -1100,14 +925,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/groups/{{groupId}}/deactivate",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "groups",
-                "{{groupId}}",
-                "deactivate"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["groups", "{{groupId}}", "deactivate"],
               "variable": [
                 {
                   "key": "id",
@@ -1129,14 +948,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/groups/:id/members",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "groups",
-                ":id",
-                "members"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["groups", ":id", "members"],
               "variable": [
                 {
                   "key": "id",
@@ -1166,14 +979,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/groups/:id/members",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "groups",
-                ":id",
-                "members"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["groups", ":id", "members"],
               "variable": [
                 {
                   "key": "id",
@@ -1195,15 +1002,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/groups/:id/members/:contactId",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "groups",
-                ":id",
-                "members",
-                ":contactId"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["groups", ":id", "members", ":contactId"],
               "variable": [
                 {
                   "key": "id",
@@ -1230,14 +1030,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/groups/{{groupId}}/activate",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "groups",
-                "{{groupId}}",
-                "activate"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["groups", "{{groupId}}", "activate"]
             }
           }
         },
@@ -1264,14 +1058,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/groups/{{groupId}}/upload",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "groups",
-                "{{groupId}}",
-                "upload"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["groups", "{{groupId}}", "upload"]
             }
           }
         },
@@ -1288,14 +1076,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/groups/{{groupId}}/uploads",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "groups",
-                "{{groupId}}",
-                "uploads"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["groups", "{{groupId}}", "uploads"]
             },
             "description": "Exposes detailed upload history list for a contact group."
           },
@@ -1314,15 +1096,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/groups/{{groupId}}/members/export",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "groups",
-                "{{groupId}}",
-                "members",
-                "export"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["groups", "{{groupId}}", "members", "export"]
             },
             "description": "Exports a CSV stream of contact group members."
           },
@@ -1351,13 +1126,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/groups/uploads",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "groups",
-                "uploads"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["groups", "uploads"]
             },
             "description": "Direct standalone recipient upload endpoint returning ContactUpload metadata."
           },
@@ -1380,12 +1150,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/templates?status=APPROVED",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "templates"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["templates"],
               "query": [
                 {
                   "key": "status",
@@ -1422,12 +1188,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/templates",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "templates"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["templates"]
             },
             "description": "Create a new template. Provide either recipientGroupId (a contact-group UUID) OR a non-empty inline recipients array (each item must have phoneE164 in E.164 format and optional name). recipientGroupId is now nullable — you may omit it if inline recipients are supplied instead."
           }
@@ -1444,13 +1206,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/templates/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "templates",
-                ":id"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["templates", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -1480,13 +1237,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/templates/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "templates",
-                ":id"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["templates", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -1509,14 +1261,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/templates/:id/approve",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "templates",
-                ":id",
-                "approve"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["templates", ":id", "approve"],
               "variable": [
                 {
                   "key": "id",
@@ -1538,14 +1284,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/templates/:id/retire",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "templates",
-                ":id",
-                "retire"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["templates", ":id", "retire"],
               "variable": [
                 {
                   "key": "id",
@@ -1568,14 +1308,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/templates/{{templateId}}/reject",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "templates",
-                "{{templateId}}",
-                "reject"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["templates", "{{templateId}}", "reject"]
             },
             "description": "Reject a DRAFT template with a reason. Requires TEMPLATE_APPROVE.",
             "body": {
@@ -1603,14 +1337,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/templates/{{templateId}}/reactivate",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "templates",
-                "{{templateId}}",
-                "reactivate"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["templates", "{{templateId}}", "reactivate"]
             },
             "description": "Move a RETIRED or REJECTED template back to DRAFT. Requires TEMPLATE_APPROVE or TEMPLATE_CREATE."
           },
@@ -1629,14 +1357,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/templates/:id/recipients",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "templates",
-                ":id",
-                "recipients"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["templates", ":id", "recipients"],
               "variable": [
                 {
                   "key": "id",
@@ -1670,14 +1392,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/templates/:id/recipients",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "templates",
-                ":id",
-                "recipients"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["templates", ":id", "recipients"],
               "variable": [
                 {
                   "key": "id",
@@ -1702,15 +1418,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/templates/:id/recipients/:phone",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "templates",
-                ":id",
-                "recipients",
-                ":phone"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["templates", ":id", "recipients", ":phone"],
               "variable": [
                 {
                   "key": "id",
@@ -1743,12 +1452,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/campaigns?status=DRAFT",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "campaigns"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["campaigns"],
               "query": [
                 {
                   "key": "status",
@@ -1784,12 +1489,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/campaigns",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "campaigns"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["campaigns"]
             },
             "description": "Create a campaign draft.\n\nRequired:\n- kind: INSTANT | SCHEDULED (SCHEDULED requires scheduledAt in the future)\n- Recipient source (one of):\n  - recipientGroupId — existing contact group UUID\n  - uploadId — ID from a standalone file upload (POST /groups/uploads)\n- Message source (one of):\n  - templateId — approved template UUID\n  - customBody — plain-text message body\n\nOmitting both recipient fields OR both message fields returns HTTP 400."
           }
@@ -1819,12 +1520,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/campaigns",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "campaigns"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["campaigns"]
             },
             "description": "Create a campaign using a standalone file upload as the recipient source instead of a contact group. First call POST /groups/uploads to get an uploadId, then pass it here."
           }
@@ -1841,14 +1538,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/campaigns/:id/submit",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "campaigns",
-                ":id",
-                "submit"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["campaigns", ":id", "submit"],
               "variable": [
                 {
                   "key": "id",
@@ -1878,14 +1569,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/campaigns/:id/approve",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "campaigns",
-                ":id",
-                "approve"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["campaigns", ":id", "approve"],
               "variable": [
                 {
                   "key": "id",
@@ -1915,14 +1600,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/campaigns/:id/reject",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "campaigns",
-                ":id",
-                "reject"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["campaigns", ":id", "reject"],
               "variable": [
                 {
                   "key": "id",
@@ -1957,13 +1636,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/campaigns/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "campaigns",
-                ":id"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["campaigns", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -1986,14 +1660,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/campaigns/:id/cancel",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "campaigns",
-                ":id",
-                "cancel"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["campaigns", ":id", "cancel"],
               "variable": [
                 {
                   "key": "id",
@@ -2021,12 +1689,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/reminders",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "reminders"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["reminders"],
               "query": [
                 {
                   "key": "status",
@@ -2052,12 +1716,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/reminders",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "reminders"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["reminders"]
             },
             "description": "Create a new reminder rule. Either templateId or customBody must be provided.",
             "body": {
@@ -2099,13 +1759,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/reminders/{{reminderId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "reminders",
-                "{{reminderId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["reminders", "{{reminderId}}"]
             },
             "description": "Partially update a reminder rule."
           },
@@ -2124,13 +1779,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/reminders/{{reminderId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "reminders",
-                "{{reminderId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["reminders", "{{reminderId}}"]
             },
             "description": "Get a single reminder rule by ID."
           },
@@ -2149,14 +1799,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/reminders/{{reminderId}}/activate",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "reminders",
-                "{{reminderId}}",
-                "activate"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["reminders", "{{reminderId}}", "activate"]
             },
             "description": "Activate a reminder rule (status \u2192 ACTIVE). The poller will start processing it."
           },
@@ -2175,14 +1819,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/reminders/{{reminderId}}/deactivate",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "reminders",
-                "{{reminderId}}",
-                "deactivate"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["reminders", "{{reminderId}}", "deactivate"]
             },
             "description": "Deactivate a reminder rule (status \u2192 INACTIVE)."
           },
@@ -2201,14 +1839,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/reminders/{{reminderId}}/trigger",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "reminders",
-                "{{reminderId}}",
-                "trigger"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["reminders", "{{reminderId}}", "trigger"]
             },
             "description": "Manually trigger a reminder rule once (fires an OutboxEvent immediately based on expiry condition)."
           },
@@ -2231,13 +1863,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/reports/messages?from=2026-01-01T00:00:00Z&to=2026-12-31T23:59:59Z&status=DELIVERED&page=0&size=20",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "reports",
-                "messages"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["reports", "messages"],
               "query": [
                 {
                   "key": "from",
@@ -2281,13 +1908,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/reports/exports",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "reports",
-                "exports"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["reports", "exports"]
             }
           }
         },
@@ -2322,13 +1944,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/reports/exports",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "reports",
-                "exports"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["reports", "exports"]
             }
           }
         },
@@ -2344,14 +1961,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/reports/exports/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "reports",
-                "exports",
-                ":id"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["reports", "exports", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -2373,14 +1984,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/reports/aggregations/daily?from=2026-01-01T00:00:00Z&to=2026-12-31T23:59:59Z",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "reports",
-                "aggregations",
-                "daily"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["reports", "aggregations", "daily"],
               "query": [
                 {
                   "key": "from",
@@ -2414,14 +2019,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/reports/aggregations/campaigns?from=2026-01-01T00:00:00Z&to=2026-12-31T23:59:59Z",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "reports",
-                "aggregations",
-                "campaigns"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["reports", "aggregations", "campaigns"],
               "query": [
                 {
                   "key": "from",
@@ -2456,14 +2055,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/reports/dashboard/summary",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "reports",
-                "dashboard",
-                "summary"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["reports", "dashboard", "summary"],
               "query": [
                 {
                   "key": "workspaceId",
@@ -2490,13 +2083,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/reports/users-activity?days=30",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "reports",
-                "users-activity"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["reports", "users-activity"],
               "query": [
                 {
                   "key": "days",
@@ -2511,77 +2099,7 @@
         }
       ]
     },
-    {
-      "name": "DLR Webhooks (Sender :8081)",
-      "item": [
-        {
-          "name": "Ethio Telecom DLR Callback",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-EthioTelecom-Signature",
-                "value": "dev-hmac-secret",
-                "description": "HMAC-SHA256 hex signature (omit in dev)",
-                "disabled": true
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"reference\": \"<message_uuid>\",\n  \"status\": \"DELIVERED\",\n  \"carrier_msg_id\": \"ET-12345\",\n  \"timestamp\": \"2026-06-01T10:05:00Z\"\n}"
-            },
-            "url": {
-              "raw": "{{senderUrl}}/webhooks/ethiotelecom/dlr",
-              "host": [
-                "{{senderUrl}}"
-              ],
-              "path": [
-                "webhooks",
-                "ethiotelecom",
-                "dlr"
-              ]
-            }
-          }
-        },
-        {
-          "name": "Safaricom DLR Callback",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Safaricom-Signature",
-                "value": "dev-hmac-secret",
-                "description": "HMAC-SHA256 hex signature (omit in dev)",
-                "disabled": true
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"reference\": \"<message_uuid>\",\n  \"status\": \"DELIVERED\",\n  \"carrier_msg_id\": \"SAF-67890\",\n  \"timestamp\": \"2026-06-01T10:05:00Z\"\n}"
-            },
-            "url": {
-              "raw": "{{senderUrl}}/webhooks/safaricom/dlr",
-              "host": [
-                "{{senderUrl}}"
-              ],
-              "path": [
-                "webhooks",
-                "safaricom",
-                "dlr"
-              ]
-            }
-          }
-        }
-      ]
-    },
+
     {
       "name": "Audit Logs",
       "item": [
@@ -2598,12 +2116,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/audit-logs",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "audit-logs"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["audit-logs"],
               "query": [
                 {
                   "key": "severity",
@@ -2670,12 +2184,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/settings",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "settings"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["settings"]
             },
             "description": "Returns all system settings as {key: value}. SUPER_ADMIN only."
           },
@@ -2694,12 +2204,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/settings",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "settings"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["settings"]
             },
             "description": "Update one or more system settings. SUPER_ADMIN only.",
             "body": {
@@ -2733,12 +2239,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/carrier-prefixes",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "carrier-prefixes"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["carrier-prefixes"]
             },
             "description": "List all carrier prefix routing rules. SUPER_ADMIN only."
           },
@@ -2757,12 +2259,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/carrier-prefixes",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "carrier-prefixes"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["carrier-prefixes"]
             },
             "description": "Add a new carrier prefix rule.",
             "body": {
@@ -2790,13 +2288,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/carrier-prefixes/{{prefixId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "carrier-prefixes",
-                "{{prefixId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["carrier-prefixes", "{{prefixId}}"]
             },
             "description": "Update a carrier prefix (e.g. toggle active).",
             "body": {
@@ -2824,13 +2317,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/carrier-prefixes/{{prefixId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "carrier-prefixes",
-                "{{prefixId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["carrier-prefixes", "{{prefixId}}"]
             },
             "description": "Delete a carrier prefix rule."
           },
@@ -2855,12 +2343,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/delegations?activeOnly=true",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "delegations"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["delegations"],
               "query": [
                 {
                   "key": "activeOnly",
@@ -2900,12 +2384,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/delegations",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "delegations"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["delegations"]
             },
             "description": "Create a new role/permission delegation. Requires ADMIN_DELEGATE authority. workspaceId and endsAt are optional."
           },
@@ -2924,13 +2404,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/delegations/mine?activeOnly=true",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "delegations",
-                "mine"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["delegations", "mine"],
               "query": [
                 {
                   "key": "activeOnly",
@@ -2956,14 +2431,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/delegations/{{delegationId}}/revoke",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "delegations",
-                "{{delegationId}}",
-                "revoke"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["delegations", "{{delegationId}}", "revoke"]
             },
             "description": "Revoke an active delegation. Requires ADMIN_DELEGATE authority."
           },

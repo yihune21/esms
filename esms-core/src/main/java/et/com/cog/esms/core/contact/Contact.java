@@ -26,7 +26,7 @@ public class Contact {
     @Column(name = "workspace_id", nullable = false)
     private UUID workspaceId;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String name;
 
     @Column(name = "phone_e164", nullable = false)

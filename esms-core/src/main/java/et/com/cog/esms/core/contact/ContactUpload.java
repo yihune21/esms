@@ -25,7 +25,7 @@ public class ContactUpload {
     @Column(name = "workspace_id", nullable = false)
     private UUID workspaceId;
 
-    @Column(name = "original_name", nullable = false)
+    @Column(name = "original_name", nullable = true)
     private String originalName;
 
     @Column(name = "file_size", nullable = false)

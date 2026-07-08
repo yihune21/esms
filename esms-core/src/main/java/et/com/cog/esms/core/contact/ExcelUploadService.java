@@ -19,7 +19,6 @@ public class ExcelUploadService {
 
     private final ContactRepository contactRepo;
     private final ContactUploadRepository uploadRepo;
-    private final ContactGroupMemberRepository memberRepo;
     private final ContactRowSaver rowSaver;
 
 
@@ -62,17 +61,20 @@ public class ExcelUploadService {
             int nameIdx = findColumnIndex(headers, "name", "Name", "NAME", "Full Name", "full_name");
             int phoneIdx = findColumnIndex(headers, "phone", "Phone", "PHONE", "phone_number",
                     "Phone Number", "phoneE164", "phone_e164", "Mobile", "mobile", "MOBILE");
-
-            if (nameIdx == -1 || phoneIdx == -1) {
+            
+            
+            if (phoneIdx == -1) {
                 upload.setStatus("FAILED");
                 upload.setErrors(List.of(Map.of("error",
-                        "Required columns 'name' and 'phone' not found. Detected columns: " + headers)));
+                        "Required columns 'phone' not found. Detected columns: " + headers)));
                 upload.setCompletedAt(Instant.now());
                 return uploadRepo.save(upload);
             }
 
             Map<String, String> mapping = new LinkedHashMap<>();
-            mapping.put(headers.get(nameIdx), "name");
+            if (nameIdx != -1) {
+                mapping.put(headers.get(nameIdx), "name");
+            }
             mapping.put(headers.get(phoneIdx), "phone_e164");
             for (int i = 0; i < headers.size(); i++) {
                 if (i != nameIdx && i != phoneIdx) {
@@ -97,9 +99,9 @@ public class ExcelUploadService {
                     String name = getCellStringValue(row.getCell(nameIdx)).trim();
                     String phone = normalizePhone(getCellStringValue(row.getCell(phoneIdx)).trim());
 
-                    if (name.isEmpty() || phone.isEmpty()) {
+                    if (phone.isEmpty()) {
                         errorCount++;
-                        errors.add(Map.of("row", rowIdx + 1, "error", "Name and phone are required"));
+                        errors.add(Map.of("row", rowIdx + 1, "error", "phone is required"));
                         continue;
                     }
 
