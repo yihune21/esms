@@ -10,6 +10,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -42,7 +43,7 @@ public class ReminderService {
                 .customBody(customBody)
                 .kind(kind != null ? kind : "CUSTOM")
                 .triggerDays(triggerDays)
-                .status("ACTIVE")
+                .status("PENDING")
                 .build();
         Reminder saved = reminderRepo.save(r);
         log.info("Reminder created: id={}, name={}, triggerDays={}", saved.getId(), name, triggerDays);
@@ -132,7 +133,8 @@ public class ReminderService {
     @Transactional
     public Reminder deactivate(UUID workspaceId, UUID reminderId) {
         Reminder r = getById(workspaceId, reminderId);
-        r.setStatus("INACTIVE");
+        r.setStatus("CANCELLED");
+        r.setCancelledAt(Instant.now());
         log.info("Reminder deactivated: id={}", reminderId);
         return reminderRepo.save(r);
     }
@@ -141,7 +143,7 @@ public class ReminderService {
     @Transactional
     public Reminder activate(UUID workspaceId, UUID reminderId) {
         Reminder r = getById(workspaceId, reminderId);
-        r.setStatus("ACTIVE");
+        r.setStatus("PENDING");
         log.info("Reminder activated: id={}", reminderId);
         return reminderRepo.save(r);
     }
@@ -198,7 +200,8 @@ public class ReminderService {
                 .payload(payloadJson)
                 .build();
         outboxRepo.save(event);
-
+        r.setStatus("FIRED");
+        r.setFiredAt(Instant.now());
         log.info("Reminder OutboxEvent created: id={}, triggerDays={}", r.getId(), r.getTriggerDays());
     }
 }

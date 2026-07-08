@@ -7,6 +7,7 @@ import et.com.cog.esms.core.identity.UserActivityLogRepository;
 import et.com.cog.esms.core.identity.UserRepository;
 import et.com.cog.esms.core.identity.WorkspaceMemberRepository;
 import et.com.cog.esms.core.messaging.MessageRepository;
+import et.com.cog.esms.core.audit.AuditService;
 import et.com.cog.esms.core.campaign.CampaignRepository;
 import et.com.cog.esms.core.workspace.WorkspaceRepository;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,7 @@ public class ReportController {
     private final CampaignRepository         campaignRepo;
     private final MessageRepository messageRepo;
     private final WorkspaceMemberRepository  memberRepo;
+    private final AuditService    auditService;
 
 
     @GetMapping("/messages")
@@ -74,6 +76,8 @@ public class ReportController {
                         e.getCreatedAt(), e.getCompletedAt(), e.getFilePath()))
                 .toList();
         
+        auditService.log(wsId, "REPORT", "INFO", "LIST_REPORT_EXPORT", "ReportExport",null);
+
         return ResponseEntity.ok(result);
     }
 
@@ -85,6 +89,8 @@ public class ReportController {
 
         UUID wsId = WorkspaceContext.currentWorkspaceId();
         ReportExport export = reportService.requestExport(wsId, req);
+        
+        auditService.log(wsId, "REPORT", "INFO", "REQ_REPORT_EXPORT", "ReportExport",null);
 
         return ResponseEntity
                 .status(HttpStatus.ACCEPTED)
@@ -103,6 +109,7 @@ public class ReportController {
                 String contentType = "XLSX".equalsIgnoreCase(export.getFormat())
                         ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         : "text/csv";
+                auditService.log(WorkspaceContext.currentWorkspaceId(), "REPORT", "INFO", "REPORT_EXPORT", "ReportExport",null);
                 return ResponseEntity.ok()
                         .contentType(MediaType.parseMediaType(contentType))
                         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.getName() + "\"")

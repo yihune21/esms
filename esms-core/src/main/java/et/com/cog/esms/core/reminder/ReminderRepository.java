@@ -15,6 +15,6 @@ public interface ReminderRepository extends JpaRepository<Reminder, UUID> {
     List<Reminder> findByWorkspaceIdAndStatusOrderByCreatedAtDesc(UUID workspaceId, String status);
 
 
-    @Query("SELECT r FROM Reminder r WHERE r.status = 'ACTIVE'")
+    @Query("SELECT r FROM Reminder r WHERE r.status = 'FIRED'")
     List<Reminder> findActiveReminders();
 }

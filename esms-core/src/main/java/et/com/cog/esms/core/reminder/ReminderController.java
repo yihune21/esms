@@ -151,7 +151,7 @@ public class ReminderController {
                     .body(java.util.Map.of("title", "No workspace context"));
         }
         reminderService.triggerNow(wsId, id);
-        auditService.log(wsId, "REMINDER", "WARN",
+        auditService.log(wsId, "REMINDER", "INFO",
                             "REMINDER_TRIGGERED", "Reminder", id);
            
         return ResponseEntity.accepted().build();
