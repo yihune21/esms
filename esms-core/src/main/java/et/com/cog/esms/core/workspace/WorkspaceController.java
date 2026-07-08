@@ -1,6 +1,8 @@
 package et.com.cog.esms.core.workspace;
 
+import et.com.cog.esms.core.identity.UserRepository;
 import et.com.cog.esms.core.identity.WorkspaceMember;
+import et.com.cog.esms.core.identity.WorkspaceMemberRepository;
 import et.com.cog.esms.core.security.WorkspaceContext;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -12,6 +14,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -24,8 +27,8 @@ public class WorkspaceController {
 
     private final WorkspaceRepository workspaceRepo;
     private final RoleRepository roleRepo;
-    private final et.com.cog.esms.core.identity.UserRepository userRepo;
-    private final et.com.cog.esms.core.identity.WorkspaceMemberRepository memberRepo;
+    private final UserRepository userRepo;
+    private final WorkspaceMemberRepository memberRepo;
     private final WorkspacePermissionRepository permissionRepo;
 
     @GetMapping
@@ -127,7 +130,7 @@ public class WorkspaceController {
 
     @PatchMapping("/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public ResponseEntity<?> update(@PathVariable UUID id,
                                     @RequestBody Map<String, Object> updates) {
         return workspaceRepo.findById(id)
@@ -283,6 +286,7 @@ public class WorkspaceController {
     @PreAuthorize("hasAuthority('WORKSPACE_MEMBER_ADD')")
     public ResponseEntity<?> addMember(@PathVariable UUID id,
                                        @Valid @RequestBody AddMemberRequest req) {
+
         var wsOpt = workspaceRepo.findById(id);
         var userOpt = userRepo.findById(req.getUserId());
         var roleOpt = roleRepo.findById(req.getRoleId());
@@ -291,16 +295,19 @@ public class WorkspaceController {
             return ResponseEntity.badRequest().body(Map.of("title", "Invalid workspace, user, or role"));
         }
 
-        if (memberRepo.existsByWorkspaceIdAndUserId(id, req.getUserId())) {
+        var userWs = memberRepo.findByUserId(req.getUserId());
+        var hasWs =  userWs.size() > 0? true : false;
+        
+        if(hasWs){
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("title", "User is already a member"));
+                    .body(Map.of("title", "User already has a workspace"));
         }
 
         var member = WorkspaceMember.builder()
                 .workspace(wsOpt.get())
                 .user(userOpt.get())
                 .role(roleOpt.get())
-                .assignedAt(java.time.Instant.now())
+                .assignedAt(Instant.now())
                 .assignedBy(WorkspaceContext.currentUserId())
                 .build();
 
@@ -356,7 +363,7 @@ public class WorkspaceController {
 
     @DeleteMapping("/{id}/members/{userId}")
     @PreAuthorize("hasAuthority('WORKSPACE_MEMBER_REMOVE')")
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public ResponseEntity<?> removeMember(@PathVariable UUID id, @PathVariable UUID userId) {
         if (!memberRepo.existsByWorkspaceIdAndUserId(id, userId)) {
             return ResponseEntity.notFound().build();
