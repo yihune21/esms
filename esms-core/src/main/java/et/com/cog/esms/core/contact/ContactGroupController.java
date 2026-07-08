@@ -335,7 +335,7 @@ public class ContactGroupController {
         groupRepo.findById(id).ifPresent(g ->
                 log.info("Exported {} members from group '{}' ({})", rows.size(), g.getName(), id));
         
-        auditService.log(wsId, "CONTACT", "WARN", "GROUP_EXPORTED", "ContactGroup", userId);
+        auditService.log(wsId, "CONTACT", "INFO", "GROUP_EXPORTED", "ContactGroup", userId);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"group_" + id + "_members.csv\"")

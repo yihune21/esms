@@ -38,26 +38,45 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
 
     long countByWorkspaceId(UUID workspaceId);
 
+    // JPQL (entity field names / camelCase — correct as-is)
     @Query("SELECT COUNT(DISTINCT m.workspaceId) FROM Message m")
     long countDistinctWorkspaces();
 
 
+    // JPQL (entity field names / camelCase — correct as-is)
     @Query("SELECT COUNT(m) FROM Message m WHERE (:wsId IS NULL OR m.workspaceId = :wsId) AND m.status = :status")
     long countByWorkspaceIdAndStatus(@Param("wsId") UUID workspaceId, @Param("status") String status);
 
-    
-    @Query("""
-        SELECT m FROM Message m
-        WHERE (:wsId IS NULL OR m.workspaceId = :wsId)
-          AND (:from       IS NULL OR m.createdAt  >= :from)
-          AND (:to         IS NULL OR m.createdAt  <= :to)
-          AND (:campaignId IS NULL OR m.campaignId  = :campaignId)
-          AND (:status     IS NULL OR m.status      = :status)
-          AND (:branch     IS NULL OR EXISTS (
-                SELECT c FROM Contact c
-                WHERE c.id = m.contactId AND c.branch = :branch))
-        ORDER BY m.createdAt DESC
-        """)
+
+    // NATIVE query — real DB column names (snake_case), AND each named parameter
+    // is cast to its target type on EVERY occurrence (including the "IS NULL"
+    // checks), not just the comparison side. Postgres cannot infer a bind
+    // parameter's type from a bare "? IS NULL" check alone — without an explicit
+    // cast there too, it throws "could not determine data type of parameter $N".
+    @Query(value = """
+        SELECT m.* FROM message m
+        WHERE (CAST(CAST(:wsId AS text) AS uuid) IS NULL OR m.workspace_id = CAST(CAST(:wsId AS text) AS uuid))
+          AND (CAST(:from AS timestamptz) IS NULL OR m.created_at >= CAST(:from AS timestamptz))
+          AND (CAST(:to AS timestamptz) IS NULL OR m.created_at <= CAST(:to AS timestamptz))
+          AND (CAST(CAST(:campaignId AS text) AS uuid) IS NULL OR m.campaign_id = CAST(CAST(:campaignId AS text) AS uuid))
+          AND (CAST(:status AS text) IS NULL OR m.status = CAST(:status AS text))
+          AND (CAST(:branch AS text) IS NULL OR EXISTS (
+                SELECT 1 FROM contact c 
+                WHERE c.id = m.contact_id AND c.branch = CAST(:branch AS text)))
+        ORDER BY m.created_at DESC
+        """, 
+        countQuery = """
+        SELECT COUNT(*) FROM message m
+        WHERE (CAST(CAST(:wsId AS text) AS uuid) IS NULL OR m.workspace_id = CAST(CAST(:wsId AS text) AS uuid))
+          AND (CAST(:from AS timestamptz) IS NULL OR m.created_at >= CAST(:from AS timestamptz))
+          AND (CAST(:to AS timestamptz) IS NULL OR m.created_at <= CAST(:to AS timestamptz))
+          AND (CAST(CAST(:campaignId AS text) AS uuid) IS NULL OR m.campaign_id = CAST(CAST(:campaignId AS text) AS uuid))
+          AND (CAST(:status AS text) IS NULL OR m.status = CAST(:status AS text))
+          AND (CAST(:branch AS text) IS NULL OR EXISTS (
+                SELECT 1 FROM contact c 
+                WHERE c.id = m.contact_id AND c.branch = CAST(:branch AS text)))
+        """,
+        nativeQuery = true)
     List<Message> findFiltered(
             @Param("wsId")       UUID    workspaceId,
             @Param("from")       Instant from,
@@ -68,14 +87,16 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
             Pageable pageable
     );
 
+    // JPQL (entity field names / camelCase — correct); "instant" is not a valid
+    // JPQL cast target — use "timestamp" instead.
     @Query("""
         SELECT COUNT(m) FROM Message m
-        WHERE (:wsId IS NULL OR m.workspaceId = :wsId)
-          AND (:from       IS NULL OR m.createdAt  >= :from)
-          AND (:to         IS NULL OR m.createdAt  <= :to)
-          AND (:campaignId IS NULL OR m.campaignId  = :campaignId)
-          AND (:status     IS NULL OR m.status      = :status)
-          AND (:branch     IS NULL OR EXISTS (
+        WHERE (CAST(:wsId AS uuid) IS NULL OR m.workspaceId = :wsId)
+          AND (CAST(:from AS timestamp) IS NULL OR m.createdAt >= :from)
+          AND (CAST(:to AS timestamp) IS NULL OR m.createdAt <= :to)
+          AND (CAST(:campaignId AS uuid) IS NULL OR m.campaignId = :campaignId)
+          AND (CAST(:status AS string) IS NULL OR m.status = :status)
+          AND (CAST(:branch AS string) IS NULL OR EXISTS (
                 SELECT c FROM Contact c
                 WHERE c.id = m.contactId AND c.branch = :branch))
         """)
@@ -88,15 +109,16 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
             @Param("branch")     String  branch
     );
 
-    
+
+    // NATIVE query — same fix: cast every occurrence of each named parameter.
     @Query(value = """
         SELECT CAST(m.created_at AS date) AS day,
-               m.status                  AS status,
-               COUNT(*)                  AS total
+               m.status                   AS status,
+               COUNT(*)                   AS total
         FROM message m
-        WHERE (:wsId IS NULL OR m.workspace_id = CAST(CAST(:wsId AS text) AS uuid))
-          AND (:from IS NULL OR m.created_at >= CAST(CAST(:from AS text) AS timestamptz))
-          AND (:to   IS NULL OR m.created_at <= CAST(CAST(:to AS text) AS timestamptz))
+        WHERE (CAST(CAST(:wsId AS text) AS uuid) IS NULL OR m.workspace_id = CAST(CAST(:wsId AS text) AS uuid))
+          AND (CAST(:from AS timestamptz) IS NULL OR m.created_at >= CAST(:from AS timestamptz))
+          AND (CAST(:to AS timestamptz) IS NULL OR m.created_at <= CAST(:to AS timestamptz))
         GROUP BY CAST(m.created_at AS date), m.status
         ORDER BY CAST(m.created_at AS date)
         """, nativeQuery = true)
@@ -106,18 +128,19 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
             @Param("to")    Instant to
     );
 
-   
+
+    // NATIVE query — same fix: cast every occurrence of each named parameter.
     @Query(value = """
-        SELECT m.campaign_id                                             AS campaignId,
+        SELECT m.campaign_id                                            AS campaignId,
                COUNT(*) FILTER (WHERE m.status = 'SENT')                AS sent,
                COUNT(*) FILTER (WHERE m.status = 'DELIVERED')           AS delivered,
                COUNT(*) FILTER (WHERE m.status = 'FAILED')              AS failed,
                COUNT(*) FILTER (WHERE m.status IN ('PENDING','QUEUED')) AS pending
         FROM message m
-        WHERE (:wsId IS NULL OR m.workspace_id = CAST(CAST(:wsId AS text) AS uuid))
+        WHERE (CAST(CAST(:wsId AS text) AS uuid) IS NULL OR m.workspace_id = CAST(CAST(:wsId AS text) AS uuid))
           AND m.campaign_id IS NOT NULL
-          AND (:from IS NULL OR m.created_at >= CAST(CAST(:from AS text) AS timestamptz))
-          AND (:to   IS NULL OR m.created_at <= CAST(CAST(:to AS text) AS timestamptz))
+          AND (CAST(:from AS timestamptz) IS NULL OR m.created_at >= CAST(:from AS timestamptz))
+          AND (CAST(:to AS timestamptz) IS NULL OR m.created_at <= CAST(:to AS timestamptz))
         GROUP BY m.campaign_id
         ORDER BY delivered DESC
         """, nativeQuery = true)

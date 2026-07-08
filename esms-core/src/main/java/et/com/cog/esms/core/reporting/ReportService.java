@@ -6,6 +6,7 @@ import et.com.cog.esms.core.security.WorkspaceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,7 +34,16 @@ public class ReportService {
                                             String status,
                                             Pageable pageable) {
 
-        List<Message> messages = messageRepo.findFiltered(workspaceId, from, to, campaignId, status, branch, pageable);
+        // findFiltered is a NATIVE query with its own hardcoded "ORDER BY m.created_at DESC".
+        // Spring Data does NOT translate Java property names (createdAt) to DB column
+        // names (created_at) for native queries — it only does that for JPQL. If the
+        // incoming Pageable carries a Sort (e.g. from a client's ?sort=createdAt,desc,
+        // or a @PageableDefault upstream), Spring appends it to the query verbatim as
+        // "m.createdAt", which Postgres rejects since the real column is "created_at".
+        // We strip the Sort here and rely entirely on the query's own ORDER BY.
+        Pageable unsortedPage = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+
+        List<Message> messages = messageRepo.findFiltered(workspaceId, from, to, campaignId, status, branch, unsortedPage);
         long total = messageRepo.countFiltered(workspaceId, from, to, campaignId, status, branch);
 
         long sent      = messageRepo.countByWorkspaceIdAndStatus(workspaceId, "SENT");

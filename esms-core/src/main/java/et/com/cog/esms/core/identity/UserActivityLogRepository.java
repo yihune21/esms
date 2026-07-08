@@ -23,13 +23,13 @@ public interface UserActivityLogRepository extends JpaRepository<UserActivityLog
     Page<UserActivityLog> findByWorkspaceIdAndCreatedAtBetween(UUID workspaceId, Instant from, Instant to, Pageable pageable);
 
     @Query("SELECT COUNT(DISTINCT u.userId) FROM UserActivityLog u " +
-           "WHERE (:wsId IS NULL OR u.workspaceId = :wsId) " +
+           "WHERE (CAST(:wsId AS uuid) IS NULL OR u.workspaceId = :wsId) " +
            "AND u.createdAt >= :since")
     long countActiveUsersSince(@Param("wsId") UUID workspaceId, @Param("since") Instant since);
 
     @Query("SELECT u.action AS action, COUNT(u) AS total FROM UserActivityLog u " +
-           "WHERE (:wsId IS NULL OR u.workspaceId = :wsId) " +
-           "AND (:since IS NULL OR u.createdAt >= :since) " +
+           "WHERE (CAST(:wsId AS uuid) IS NULL OR u.workspaceId = :wsId) " +
+           "AND (CAST(:since AS timestamp) IS NULL OR u.createdAt >= :since) " +
            "GROUP BY u.action ORDER BY total DESC")
     List<ActionFrequencyPoint> findActionFrequency(@Param("wsId") UUID workspaceId,
                                                     @Param("since") Instant since);

@@ -1,5 +1,6 @@
 package et.com.cog.esms.core.workspace;
 
+import et.com.cog.esms.core.identity.WorkspaceMember;
 import et.com.cog.esms.core.security.WorkspaceContext;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -9,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -80,7 +82,7 @@ public class WorkspaceController {
         if (req.getAdminUserId() != null) {
             roleRepo.findByCode("DEPT_HEAD").ifPresent(role -> {
                 userRepo.findById(req.getAdminUserId()).ifPresent(user -> {
-                    memberRepo.save(et.com.cog.esms.core.identity.WorkspaceMember.builder()
+                    memberRepo.save(WorkspaceMember.builder()
                             .workspace(savedWs)
                             .user(user)
                             .role(role)
@@ -95,7 +97,7 @@ public class WorkspaceController {
         if (hasDelegation && req.getDelegateUserId() != null) {
             roleRepo.findByCode("CEO").ifPresentOrElse(
                 ceoRole -> userRepo.findById(req.getDelegateUserId()).ifPresent(user ->
-                    memberRepo.save(et.com.cog.esms.core.identity.WorkspaceMember.builder()
+                    memberRepo.save(WorkspaceMember.builder()
                             .workspace(savedWs)
                             .user(user)
                             .role(ceoRole)
@@ -170,7 +172,7 @@ public class WorkspaceController {
                                                         member.setRole(deptHeadRole);
                                                         memberRepo.save(member);
                                                     },
-                                                    () -> memberRepo.save(et.com.cog.esms.core.identity.WorkspaceMember.builder()
+                                                    () -> memberRepo.save(WorkspaceMember.builder()
                                                             .workspace(ws)
                                                             .user(user)
                                                             .role(deptHeadRole)
@@ -211,7 +213,7 @@ public class WorkspaceController {
                                             .ifPresentOrElse(
                                                     member -> { member.setRole(ceoRole); memberRepo.save(member); },
                                                     () -> memberRepo.save(
-                                                            et.com.cog.esms.core.identity.WorkspaceMember.builder()
+                                                            WorkspaceMember.builder()
                                                                     .workspace(ws)
                                                                     .user(user)
                                                                     .role(ceoRole)
@@ -294,7 +296,7 @@ public class WorkspaceController {
                     .body(Map.of("title", "User is already a member"));
         }
 
-        var member = et.com.cog.esms.core.identity.WorkspaceMember.builder()
+        var member = WorkspaceMember.builder()
                 .workspace(wsOpt.get())
                 .user(userOpt.get())
                 .role(roleOpt.get())
@@ -310,7 +312,7 @@ public class WorkspaceController {
     
     @PatchMapping("/{id}/members/{userId}")
     @PreAuthorize("hasAuthority('WORKSPACE_MEMBER_ADD')")
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public ResponseEntity<?> changeMemberRole(@PathVariable UUID id,
                                               @PathVariable UUID userId,
                                               @RequestBody Map<String, Object> body) {

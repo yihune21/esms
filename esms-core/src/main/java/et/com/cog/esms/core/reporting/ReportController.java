@@ -6,6 +6,7 @@ import et.com.cog.esms.core.security.WorkspaceContext;
 import et.com.cog.esms.core.identity.UserActivityLogRepository;
 import et.com.cog.esms.core.identity.UserRepository;
 import et.com.cog.esms.core.identity.WorkspaceMemberRepository;
+import et.com.cog.esms.core.messaging.MessageRepository;
 import et.com.cog.esms.core.campaign.CampaignRepository;
 import et.com.cog.esms.core.workspace.WorkspaceRepository;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +38,7 @@ public class ReportController {
     private final UserRepository             userRepo;
     private final WorkspaceRepository        workspaceRepo;
     private final CampaignRepository         campaignRepo;
-    private final et.com.cog.esms.core.messaging.MessageRepository messageRepo;
+    private final MessageRepository messageRepo;
     private final WorkspaceMemberRepository  memberRepo;
 
 
@@ -222,7 +223,7 @@ public class ReportController {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"));
         
         if (isSuperAdmin && "00000000-0000-0000-0000-000000000000".equals(String.valueOf(overrideWsId))) {
-            return null; // Platform-level aggregation
+            return null;
         }
         if (isSuperAdmin && overrideWsId != null) {
             return overrideWsId;
