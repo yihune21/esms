@@ -1,2 +1,6 @@
 .env
 test_api.sh
+.vscode
+esms-common/target/
+esms-core/target/
+esms-sender/target/

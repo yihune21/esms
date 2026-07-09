@@ -1,2 +1,0 @@
-ALTER TABLE contact_upload ALTER COLUMN original_name DROP NOT NULL;
-ALTER TABLE contact ALTER COLUMN name DROP NOT NULL;

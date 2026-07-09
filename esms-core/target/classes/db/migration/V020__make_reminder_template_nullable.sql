@@ -1,1 +1,0 @@
-ALTER TABLE schedule ALTER COLUMN template_id DROP NOT NULL;
