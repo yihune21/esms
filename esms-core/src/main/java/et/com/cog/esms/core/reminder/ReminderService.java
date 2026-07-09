@@ -198,6 +198,7 @@ public class ReminderService {
                 .aggregateId(r.getId())
                 .eventType("ReminderFire")
                 .payload(payloadJson)
+                .createdAt(Instant.now())
                 .build();
         outboxRepo.save(event);
         r.setStatus("FIRED");
