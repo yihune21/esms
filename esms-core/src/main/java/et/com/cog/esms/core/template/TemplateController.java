@@ -113,10 +113,6 @@ public class TemplateController {
                                     @RequestBody Map<String, Object> updates) {
         return templateRepo.findById(id)
                 .map(t -> {
-                    if (!"DRAFT".equals(t.getStatus())) {
-                        return ResponseEntity.status(HttpStatus.CONFLICT)
-                                .body(Map.of("title", "Only DRAFT templates can be edited. Current status: " + t.getStatus()));
-                    }
                     if (updates.containsKey("name"))             t.setName((String) updates.get("name"));
                     if (updates.containsKey("description"))      t.setDescription((String) updates.get("description"));
                     if (updates.containsKey("body"))             t.setBody((String) updates.get("body"));
