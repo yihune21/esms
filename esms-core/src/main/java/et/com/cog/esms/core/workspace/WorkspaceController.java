@@ -82,6 +82,14 @@ public class WorkspaceController {
             }
         }
 
+        var userWs = memberRepo.findByUserId(req.getAdminUserId());
+        var hasWs = userWs.size() > 0 ? true : false;
+        if(hasWs){
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("title",
+                            "Cannot assign a user that has a another workspace.")); 
+        }
+                    
         if (req.getAdminUserId() != null) {
             roleRepo.findByCode("DEPT_HEAD").ifPresent(role -> {
                 userRepo.findById(req.getAdminUserId()).ifPresent(user -> {
