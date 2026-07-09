@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
@@ -133,12 +134,13 @@ public class TemplateController {
                         List<String> vars = (List<String>) updates.get("variables");
                         t.setVariables(vars);
                     }
+                    t.setStatus("DRAFT");
                     
                     Template saved  = templateRepo.save(t);
-
+                    
                     auditService.log(WorkspaceContext.currentWorkspaceId(), "TEMPLATE", "INFO",
                             "TEMPLATE_UPDATED", "TEMPLATE", saved.getId());
-           
+                    
                     return ResponseEntity.ok(toDto(templateRepo.save(t)));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -154,10 +156,10 @@ public class TemplateController {
                                 .body(Map.of("title", "Only DRAFT templates can be approved"));
                     }
                     UUID actorId = WorkspaceContext.currentUserId();
-                    boolean isSuperAdmin = org.springframework.security.core.context.SecurityContextHolder
+                    boolean isSuperAdmin = SecurityContextHolder
                             .getContext().getAuthentication().getAuthorities().stream()
                             .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"));
-                    boolean isDeptHead = org.springframework.security.core.context.SecurityContextHolder
+                    boolean isDeptHead = SecurityContextHolder
                             .getContext().getAuthentication().getAuthorities().stream()
                             .anyMatch(a -> a.getAuthority().equals("ROLE_DEPT_HEAD"));
                     if (t.getCreatedBy().equals(actorId) && !isSuperAdmin && !isDeptHead) {
