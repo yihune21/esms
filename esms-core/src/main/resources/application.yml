@@ -58,6 +58,11 @@ spring:
       write-dates-as-timestamps: false
     default-property-inclusion: non_null
     time-zone: UTC
+  # ldap:
+  #   urls: ldaps://your-ad-server.company.com:636
+  #   base: DC=company,DC=com
+  #   username: CN=svc-readonly,OU=ServiceAccounts,DC=company,DC=com
+  #   password: ${AD_SERVICE_PASSWORD}
 
 server:
   port: ${APP_PORT_CORE:8080}
@@ -133,4 +138,4 @@ logging:
     et.com.cog.esms: DEBUG
     org.springframework.security: WARN
     org.hibernate.SQL: WARN
-    org.hibernate.orm.jdbc.bind: TRACE
+    # org.hibernate.orm.jdbc.bind: TRACE

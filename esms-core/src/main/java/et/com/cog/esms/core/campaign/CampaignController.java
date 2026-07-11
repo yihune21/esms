@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -78,7 +79,7 @@ public class CampaignController {
             return ResponseEntity.ok(toDto(c));
         } catch (IllegalStateException e) {
             auditService.log(wsId, "CAMPAIGN", "WARN", "CAMPAIGN_SUBMIT_REJECTED_STATE", "Campaign", id);
-            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("title", e.getMessage()));
         } catch (IllegalArgumentException e) {
             auditService.log(wsId, "CAMPAIGN", "WARN", "CAMPAIGN_SUBMIT_REJECTED_INVALID", "Campaign", id);
@@ -97,23 +98,23 @@ public class CampaignController {
             return ResponseEntity.notFound().build();
         }
         boolean isCeoStage = "PENDING_CEO".equals(campaign.getStatus());
-        boolean hasCeoPermission = org.springframework.security.core.context.SecurityContextHolder
+        boolean hasCeoPermission = SecurityContextHolder
                 .getContext().getAuthentication().getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("CAMPAIGN_APPROVE_CEO"));
-        boolean hasHeadPermission = org.springframework.security.core.context.SecurityContextHolder
+        boolean hasHeadPermission = SecurityContextHolder
                 .getContext().getAuthentication().getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("CAMPAIGN_APPROVE"));
 
         if (isCeoStage && !hasCeoPermission) {
             auditService.log(wsId, "CAMPAIGN", "CRITICAL",
                     "CAMPAIGN_APPROVE_DENIED_CEO_TIER", "Campaign", id);
-            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(null);
         }
         if (!isCeoStage && !hasHeadPermission) {
             auditService.log(wsId, "CAMPAIGN", "WARN",
                     "CAMPAIGN_APPROVE_DENIED", "Campaign", id);
-            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(null);
         }
 
@@ -127,7 +128,7 @@ public class CampaignController {
             return ResponseEntity.ok(toDto(approved));
         } catch (IllegalStateException e) {
             auditService.log(wsId, "CAMPAIGN", "WARN", "CAMPAIGN_APPROVE_REJECTED_STATE", "Campaign", id);
-            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(null);
         }
     }
