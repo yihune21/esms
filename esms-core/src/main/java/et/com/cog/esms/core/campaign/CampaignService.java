@@ -8,7 +8,6 @@ import et.com.cog.esms.core.messaging.OutboxEventRepository;
 import et.com.cog.esms.core.security.WorkspaceContext;
 import et.com.cog.esms.core.workspace.Workspace;
 import et.com.cog.esms.core.workspace.WorkspaceRepository;
-import et.com.cog.esms.core.workspace.WorkspacePermissionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -29,7 +28,6 @@ public class CampaignService {
     private final WorkspaceRepository workspaceRepo;
     private final OutboxEventRepository outboxRepo;
     private final ObjectMapper objectMapper;
-    private final WorkspacePermissionRepository permissionRepo;
     private final AuditService auditService;
 
 
@@ -42,12 +40,6 @@ public class CampaignService {
         Map.entry("CLAIMS:PENDING_APPROVAL",        Set.of("APPROVED", "DRAFT")),
         Map.entry("MARKETING:PENDING_APPROVAL",     Set.of("APPROVED", "DRAFT")),
         Map.entry("GENERIC:PENDING_APPROVAL",       Set.of("APPROVED", "DRAFT")),
-
-        Map.entry("DELEGATION:DRAFT",              Set.of("PENDING_HEAD")),
-        Map.entry("DELEGATION:PENDING_HEAD",       Set.of("PENDING_CEO", "DRAFT")),
-        Map.entry("DELEGATION:PENDING_CEO",        Set.of("APPROVED", "DRAFT")),
-        Map.entry("DELEGATION:APPROVED",           Set.of("CANCELLED")),
-        Map.entry("DELEGATION:QUEUED",             Set.of("CANCELLED")),
 
         Map.entry("FINANCE:DRAFT",           Set.of("PENDING_HEAD")),
         Map.entry("FINANCE:PENDING_HEAD",    Set.of("PENDING_CEO", "DRAFT")),
@@ -116,10 +108,12 @@ public class CampaignService {
         Workspace ws = workspaceRepo.findById(c.getWorkspaceId())
                 .orElseThrow(() -> new IllegalStateException("Workspace not found"));
 
-        boolean hasDelegation = permissionRepo.existsByWorkspaceIdAndPermissionCode(ws.getId(), "DELEGATION");
+        // Tiering is decided solely by workspace kind: FINANCE is two-tier (Head -> CEO),
+        // every other workspace is one-tier Maker-Checker. Delegation never changes the tier.
+        boolean twoTier = "FINANCE".equals(ws.getKind());
 
-        String targetState = ("FINANCE".equals(ws.getKind()) || hasDelegation) ? "PENDING_HEAD" : "PENDING_APPROVAL";
-        validateTransition(ws.getKind(), c.getStatus(), targetState, hasDelegation);
+        String targetState = twoTier ? "PENDING_HEAD" : "PENDING_APPROVAL";
+        validateTransition(ws.getKind(), c.getStatus(), targetState);
 
         recordApproval(c, c.getStatus(), targetState, null);
         c.setStatus(targetState);
@@ -137,7 +131,7 @@ public class CampaignService {
         Workspace ws = workspaceRepo.findById(c.getWorkspaceId())
                 .orElseThrow(() -> new IllegalStateException("Workspace not found"));
 
-        boolean hasDelegation = permissionRepo.existsByWorkspaceIdAndPermissionCode(ws.getId(), "DELEGATION");
+        boolean twoTier = "FINANCE".equals(ws.getKind());
         UUID actorId = WorkspaceContext.currentUserId();
 
         
@@ -154,7 +148,7 @@ public class CampaignService {
 
         String targetState;
         if ("PENDING_HEAD".equals(c.getStatus())) {
-            targetState = ("FINANCE".equals(ws.getKind()) || hasDelegation) ? "PENDING_CEO" : "APPROVED";
+            targetState = twoTier ? "PENDING_CEO" : "APPROVED";
         } else if ("PENDING_CEO".equals(c.getStatus())) {
             targetState = "APPROVED";
         } else if ("PENDING_APPROVAL".equals(c.getStatus())) {
@@ -163,7 +157,7 @@ public class CampaignService {
             throw new IllegalStateException("Campaign is not in an approvable state: " + c.getStatus());
         }
 
-        validateTransition(ws.getKind(), c.getStatus(), targetState, hasDelegation);
+        validateTransition(ws.getKind(), c.getStatus(), targetState);
         recordApproval(c, c.getStatus(), targetState, note);
         c.setStatus(targetState);
         Campaign saved = campaignRepo.save(c);
@@ -209,9 +203,7 @@ public class CampaignService {
         Workspace ws = workspaceRepo.findById(c.getWorkspaceId())
                 .orElseThrow(() -> new IllegalStateException("Workspace not found"));
 
-        boolean hasDelegation = permissionRepo.existsByWorkspaceIdAndPermissionCode(ws.getId(), "DELEGATION");
-
-        validateTransition(ws.getKind(), c.getStatus(), "DRAFT", hasDelegation);
+        validateTransition(ws.getKind(), c.getStatus(), "DRAFT");
         recordApproval(c, c.getStatus(), "DRAFT", note);
         c.setStatus("DRAFT");
         Campaign saved = campaignRepo.save(c);
@@ -254,9 +246,7 @@ public class CampaignService {
         Workspace ws = workspaceRepo.findById(c.getWorkspaceId())
                 .orElseThrow(() -> new IllegalStateException("Workspace not found"));
 
-        boolean hasDelegation = permissionRepo.existsByWorkspaceIdAndPermissionCode(ws.getId(), "DELEGATION");
-
-        validateTransition(ws.getKind(), c.getStatus(), "CANCELLED", hasDelegation);
+        validateTransition(ws.getKind(), c.getStatus(), "CANCELLED");
         recordApproval(c, c.getStatus(), "CANCELLED", note);
         c.setStatus("CANCELLED");
         c.setCompletedAt(Instant.now());
@@ -308,22 +298,17 @@ public class CampaignService {
     }
 
 
-    private void validateTransition(String wsKind, String fromState, String toState, boolean hasDelegation) {
-       
-        String effectiveKind;
-        if (hasDelegation && !"FINANCE".equals(wsKind)) {
-            effectiveKind = "DELEGATION";
-        } else if (hasDelegation || "FINANCE".equals(wsKind)) {
-            effectiveKind = "FINANCE";
-        } else {
-            effectiveKind = wsKind;
-        }
+    private void validateTransition(String wsKind, String fromState, String toState) {
+        // FINANCE follows the two-tier (Head -> CEO) chain; every other workspace kind
+        // follows its own one-tier Maker-Checker chain. No delegation-driven tiering.
+        String effectiveKind = "FINANCE".equals(wsKind) ? "FINANCE" : wsKind;
+
         String key = effectiveKind + ":" + fromState;
         Set<String> allowed = TRANSITIONS.get(key);
         if (allowed == null || !allowed.contains(toState)) {
             throw new IllegalStateException(
-                    String.format("Illegal transition %s → %s for workspace kind %s (delegation=%b)",
-                            fromState, toState, wsKind, hasDelegation));
+                    String.format("Illegal transition %s → %s for workspace kind %s",
+                            fromState, toState, wsKind));
         }
     }
 

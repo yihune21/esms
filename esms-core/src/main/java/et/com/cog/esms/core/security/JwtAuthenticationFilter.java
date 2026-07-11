@@ -118,17 +118,28 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (!activeDelegations.isEmpty()) {
                 isDelegating = true;
-                log.debug("User {} has {} active delegation(s) — injecting CEO authorities",
-                        userId, activeDelegations.size());
 
-                roleRepo.findByCode("CEO").ifPresent(ceoRole -> {
-                    List<String> ceoCodes = ceoRole.getPermissionCodes();
-                    for (String code : ceoCodes) {
-                        if (!effectivePermissions.contains(code)) {
-                            effectivePermissions.add(code);
-                        }
-                    }
-                });
+                // A delegation is a time-boxed transfer of the delegator's OWN authority.
+                // For each active delegation, union the delegator's role permissions (as held
+                // in that delegation's workspace) into the delegate's effective permissions.
+                // This is recomputed on every request, so the elevation disappears automatically
+                // the moment the delegation expires or is revoked — nothing persistent to undo.
+                for (Delegation delegation : activeDelegations) {
+                    memberRepo.findByWorkspaceIdAndUserId(
+                                    delegation.getWorkspaceId(), delegation.getFromUserId())
+                            .ifPresent(delegatorMember -> {
+                                List<String> delegatorCodes = delegatorMember.getRole().getPermissionCodes();
+                                for (String code : delegatorCodes) {
+                                    if (!effectivePermissions.contains(code)) {
+                                        effectivePermissions.add(code);
+                                    }
+                                }
+                                log.debug("User {} is acting under delegation from {} in workspace {} — "
+                                                + "injected {} delegator permission(s)",
+                                        userId, delegation.getFromUserId(), delegation.getWorkspaceId(),
+                                        delegatorCodes.size());
+                            });
+                }
             }
         } catch (Exception ex) {
             log.warn("Delegation authority injection failed for userId={}: {}", userId, ex.getMessage());

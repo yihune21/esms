@@ -4,3 +4,4 @@ test_api.sh
 esms-common/target/
 esms-core/target/
 esms-sender/target/
+/doc
