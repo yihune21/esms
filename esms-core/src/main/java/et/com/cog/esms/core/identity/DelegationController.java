@@ -63,9 +63,9 @@ public class DelegationController {
 
         var userWs = memberRepo.findByUserId(req.getToUserId());
         var hasWs =  userWs.size() > 0? true : false;
-        var userWsId = hasWs ? userWs.getFirst().getId() : null;
+        var userWsId = hasWs ? userWs.get(0).getId() : null;
         
-       if( userWsId != wsId ){
+       if(!wsId.equals(userWsId) ){
            auditService.log(wsId, "ADMIN", "WARN", "DELEGATION_USER_HAS_WORKSPACE", "Delegation", null);
            return ResponseEntity.status(HttpStatus.CONFLICT)
                    .body(Map.of("title", "User already has another workspace"));
@@ -103,7 +103,7 @@ public class DelegationController {
 
         boolean grantedMembership = false;
         var delegatorUserRole = roleRepo.findByUserId(fromUserId);
-        var roleCode = delegatorUserRole.getFirst().getCode();
+        var roleCode = delegatorUserRole.get(0).getCode();
         if (!memberRepo.existsByWorkspaceIdAndUserId(wsId, req.getToUserId())) {
             roleRepo.findByCode(roleCode).ifPresent(role ->
                 userRepo.findById(req.getToUserId()).ifPresent(delegateUser -> {
