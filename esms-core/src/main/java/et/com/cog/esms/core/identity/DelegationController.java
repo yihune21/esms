@@ -65,7 +65,7 @@ public class DelegationController {
         var hasWs =  userWs.size() > 0? true : false;
         var userWsId = hasWs ? userWs.get(0).getId() : null;
         
-       if( userWsId != wsId ){
+       if(!wsId.equals(userWsId) ){
            auditService.log(wsId, "ADMIN", "WARN", "DELEGATION_USER_HAS_WORKSPACE", "Delegation", null);
            return ResponseEntity.status(HttpStatus.CONFLICT)
                    .body(Map.of("title", "User already has another workspace"));
