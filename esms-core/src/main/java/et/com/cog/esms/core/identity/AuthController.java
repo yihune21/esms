@@ -108,6 +108,23 @@ public class AuthController {
         return switch (result) {
             case VALID -> {
                 var memberships = memberRepository.findByUserId(userId);
+
+                // A user has exactly one workspace membership (SUPER_ADMIN has
+                // none). If that workspace was deactivated, reject before ever
+                // issuing an access token — otherwise the user would sign in
+                // successfully only to be blocked on the very next request.
+                boolean isSuperAdmin = memberships.stream()
+                        .anyMatch(m -> "SUPER_ADMIN".equals(m.getRole().getCode()));
+                if (!isSuperAdmin && !memberships.isEmpty()
+                        && !"ACTIVE".equals(memberships.get(0).getWorkspace().getStatus())) {
+                    auditService.log(memberships.get(0).getWorkspace().getId(), "AUTH", "WARN",
+                            "LOGIN_WORKSPACE_DEACTIVATED", "User", userId);
+                    yield ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .header("Content-Type", "application/problem+json")
+                            .body(Map.of("type", "/errors/auth", "status", 403, "code", "WORKSPACE_DEACTIVATED",
+                                    "title", "Your workspace has been deactivated. Contact your administrator."));
+                }
+
                 List<Map<String, Object>> workspaces = memberships.stream()
                         .map(m -> {
                             Map<String, Object> ws = new LinkedHashMap<>();

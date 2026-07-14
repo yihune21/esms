@@ -1,5 +1,6 @@
 package et.com.cog.esms.core.workspace;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import et.com.cog.esms.core.identity.UserRepository;
 import et.com.cog.esms.core.identity.WorkspaceMember;
 import et.com.cog.esms.core.identity.WorkspaceMemberRepository;
@@ -84,15 +85,15 @@ public class WorkspaceController {
             String memberGuard = adminMembershipConflict(req.getAdminUserId());
             if (memberGuard != null) return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("title", memberGuard));
 
+            // Daily SMS limit lives on the umbrella, not the branch — and a
+            // branch can never have its own delegate sign-off, regardless of
+            // whether the umbrella has the DELEGATION feature.
             Workspace branch = workspaceRepo.save(Workspace.builder()
                     .code(req.getCode()).name(req.getName())
                     .kind(parent.getKind()).division(req.getDivision())
-                    .dailySmsLimit(req.getDailySmsLimit())
                     .parentWorkspaceId(parent.getId()).isBranchParent(false)
                     .status("ACTIVE").build());
             assignAdmin(branch, req.getAdminUserId());
-            assignDelegate(branch, req.getDelegateUserId(),
-                    parentPermissions(parent).contains("DELEGATION"));
             return ResponseEntity.status(HttpStatus.CREATED).body(toDtoEnriched(branch, parentPermissions(parent)));
         }
 
@@ -108,23 +109,27 @@ public class WorkspaceController {
             String memberGuard = adminMembershipConflict(req.getFirstBranchAdminUserId());
             if (memberGuard != null) return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("title", memberGuard));
 
+            // The umbrella holds the daily limit for all its branches, and can
+            // never carry the DELEGATION feature — a branch-workspace (and its
+            // branches) never gets a delegate sign-off seat.
             Workspace umbrella = workspaceRepo.save(Workspace.builder()
                     .code(req.getCode()).name(req.getName())
                     .kind(req.getKind() != null ? req.getKind() : "GENERIC")
-                    .division(req.getDivision()).isBranchParent(true)
+                    .division(req.getDivision()).dailySmsLimit(req.getDailySmsLimit())
+                    .isBranchParent(true)
                     .status("ACTIVE").build());
-            List<String> perms = req.getPermissions() != null ? req.getPermissions() : List.of();
+            List<String> perms = req.getPermissions() != null
+                    ? req.getPermissions().stream().filter(p -> !"DELEGATION".equals(p)).toList()
+                    : List.of();
             for (String perm : perms) permissionRepo.save(new WorkspacePermission(umbrella.getId(), perm));
 
             Workspace branch = workspaceRepo.save(Workspace.builder()
                     .code(deriveBranchCode(req.getCode(), req.getFirstBranchName()))
                     .name(req.getFirstBranchName())
                     .kind(umbrella.getKind())
-                    .dailySmsLimit(req.getDailySmsLimit())
                     .parentWorkspaceId(umbrella.getId()).isBranchParent(false)
                     .status("ACTIVE").build());
             assignAdmin(branch, req.getFirstBranchAdminUserId());
-            assignDelegate(branch, req.getDelegateUserId(), perms.contains("DELEGATION"));
             return ResponseEntity.status(HttpStatus.CREATED).body(toDtoEnriched(umbrella, perms));
         }
 
@@ -247,15 +252,28 @@ public class WorkspaceController {
                     if (updates.containsKey("division")) ws.setDivision((String) updates.get("division"));
                     if (updates.containsKey("status")) ws.setStatus((String) updates.get("status"));
                     if (updates.containsKey("senderMask")) ws.setSenderMask((String) updates.get("senderMask"));
-                    if (updates.containsKey("dailySmsLimit")) {
+                    boolean isBranch = ws.getParentWorkspaceId() != null;
+                    // The daily limit lives on the umbrella (or a standalone
+                    // workspace) and applies to every branch beneath it — a
+                    // branch never has its own limit.
+                    if (updates.containsKey("dailySmsLimit") && !isBranch) {
                         Object raw = updates.get("dailySmsLimit");
                         if (raw instanceof Number) ws.setDailySmsLimit(((Number) raw).intValue());
                     }
                     workspaceRepo.save(ws);
-                    
+
                     if (updates.containsKey("permissions")) {
                         @SuppressWarnings("unchecked")
-                        List<String> perms = (List<String>) updates.get("permissions");
+                        List<String> rawPerms = (List<String>) updates.get("permissions");
+                        // Branches inherit permissions and never carry their own
+                        // rows, and DELEGATION can never apply to a branch-workspace
+                        // (umbrella) or a branch — strip it out regardless of what
+                        // was sent.
+                        List<String> perms = isBranch
+                                ? List.of()
+                                : rawPerms.stream()
+                                        .filter(p -> !ws.isBranchParent() || !"DELEGATION".equals(p))
+                                        .toList();
                         permissionRepo.deleteByWorkspaceId(id);
                         for (String perm : perms) {
                             permissionRepo.save(new WorkspacePermission(id, perm));
@@ -300,9 +318,12 @@ public class WorkspaceController {
                     boolean delegationKeyPresent = updates.containsKey("delegateUserId");
                     List<String> currentPermsForCheck = permissionRepo.findByWorkspaceId(id)
                             .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
-                    boolean delegationFeatureActive = currentPermsForCheck.contains("DELEGATION")
-                            || (updates.containsKey("permissions")
-                                && ((List<?>) updates.get("permissions")).contains("DELEGATION"));
+                    // A branch-workspace (umbrella) or a branch can never have a
+                    // delegate seat, no matter what the request asked for.
+                    boolean delegationFeatureActive = !isBranch && !ws.isBranchParent()
+                            && (currentPermsForCheck.contains("DELEGATION")
+                                || (updates.containsKey("permissions")
+                                    && ((List<?>) updates.get("permissions")).contains("DELEGATION")));
 
                     if (delegationKeyPresent) {
                         String delegateIdStr = (String) updates.get("delegateUserId");
@@ -369,6 +390,15 @@ public class WorkspaceController {
         return workspaceRepo.findById(id).map(ws -> {
             ws.setStatus("SUSPENDED");
             workspaceRepo.save(ws);
+            // An umbrella holds no members itself — suspending only the umbrella
+            // row would lock out nobody. Cascade to every branch underneath it so
+            // deactivating it actually cuts off access for its members.
+            if (ws.isBranchParent()) {
+                workspaceRepo.findByParentWorkspaceId(ws.getId()).forEach(branch -> {
+                    branch.setStatus("SUSPENDED");
+                    workspaceRepo.save(branch);
+                });
+            }
             List<String> perms = permissionRepo.findByWorkspaceId(id)
                     .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
             return ResponseEntity.ok(toDto(ws, perms));
@@ -382,6 +412,14 @@ public class WorkspaceController {
         return workspaceRepo.findById(id).map(ws -> {
             ws.setStatus("ACTIVE");
             workspaceRepo.save(ws);
+            // Mirror of the deactivate cascade: reactivating the umbrella
+            // restores access for every branch suspended alongside it.
+            if (ws.isBranchParent()) {
+                workspaceRepo.findByParentWorkspaceId(ws.getId()).forEach(branch -> {
+                    branch.setStatus("ACTIVE");
+                    workspaceRepo.save(branch);
+                });
+            }
             List<String> perms = permissionRepo.findByWorkspaceId(id)
                     .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
             return ResponseEntity.ok(toDto(ws, perms));
@@ -581,6 +619,10 @@ public class WorkspaceController {
         private UUID         delegateUserId;
         private UUID         parentWorkspaceId;
         private String       parentName;
+        // Lombok's boolean-getter convention (isBranchParent()) makes Jackson
+        // derive the JSON property name "branchParent" by default — pin it
+        // explicitly so the frontend's `isBranchParent` key actually matches.
+        @JsonProperty("isBranchParent")
         private boolean      isBranchParent;
         private int          branchCount;
     }
@@ -601,6 +643,10 @@ public class WorkspaceController {
         // owns branches and holds no data of its own; when true, firstBranch*
         // create its mandatory first branch in the same request.
         private UUID parentWorkspaceId;
+        // Same Lombok/Jackson mismatch as WorkspaceDto — without this the
+        // incoming JSON key "isBranchParent" binds to nothing (Lombok's setter
+        // is setBranchParent(...)) and the field silently stays false.
+        @JsonProperty("isBranchParent")
         private boolean isBranchParent;
         private String firstBranchName;
         private UUID firstBranchAdminUserId;
