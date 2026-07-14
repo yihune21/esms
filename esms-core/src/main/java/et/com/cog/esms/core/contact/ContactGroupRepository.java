@@ -13,5 +13,10 @@ public interface ContactGroupRepository extends JpaRepository<ContactGroup, UUID
 
     List<ContactGroup> findByWorkspaceIdAndStatusOrderByCreatedAtDesc(UUID workspaceId, String status);
 
+    // Platform-wide (super admin, no workspace context) — every workspace's groups.
+    List<ContactGroup> findAllByOrderByCreatedAtDesc();
+
+    List<ContactGroup> findByStatusOrderByCreatedAtDesc(String status);
+
     boolean existsByWorkspaceIdAndName(UUID workspaceId, String name);
 }

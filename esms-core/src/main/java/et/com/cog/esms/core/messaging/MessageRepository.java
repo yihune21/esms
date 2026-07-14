@@ -30,11 +30,17 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
 
     List<Message> findByCampaignId(UUID campaignId);
 
+    List<Message> findByReminderId(UUID reminderId);
+
     List<Message> findByWorkspaceIdAndStatus(UUID workspaceId, String status);
 
     long countByCampaignIdAndStatusIn(UUID campaignId, List<String> terminalStatuses);
 
     long countByCampaignId(UUID campaignId);
+
+    long countByReminderIdAndStatusIn(UUID reminderId, List<String> terminalStatuses);
+
+    long countByReminderId(UUID reminderId);
 
     long countByWorkspaceId(UUID workspaceId);
 

@@ -19,8 +19,11 @@ public class Approval {
     @Column(name = "workspace_id", nullable = false)
     private UUID workspaceId;
 
-    @Column(name = "campaign_id", nullable = false)
+    @Column(name = "campaign_id")
     private UUID campaignId;
+
+    @Column(name = "reminder_id")
+    private UUID reminderId;
 
     @Column(name = "from_state", nullable = false)
     private String fromState;

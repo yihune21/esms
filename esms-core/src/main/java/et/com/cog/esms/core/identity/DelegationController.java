@@ -63,7 +63,7 @@ public class DelegationController {
 
         var userWs = memberRepo.findByUserId(req.getToUserId());
         var hasWs =  userWs.size() > 0? true : false;
-        var userWsId = hasWs ? userWs.getFirst().getId() : null;
+        var userWsId = hasWs ? userWs.get(0).getId() : null;
         
        if( userWsId != wsId ){
            auditService.log(wsId, "ADMIN", "WARN", "DELEGATION_USER_HAS_WORKSPACE", "Delegation", null);
@@ -102,8 +102,9 @@ public class DelegationController {
         Delegation saved = delegationRepo.save(delegation);
 
         boolean grantedMembership = false;
-        var delegatorUserRole = roleRepo.findByUserId(fromUserId);
-        var roleCode = delegatorUserRole.getFirst().getCode();
+        var delegatorMembership = memberRepo.findByWorkspaceIdAndUserId(wsId, fromUserId)
+                .orElseThrow(() -> new IllegalStateException("Delegator is not a member of this workspace"));
+        var roleCode = delegatorMembership.getRole().getCode();
         if (!memberRepo.existsByWorkspaceIdAndUserId(wsId, req.getToUserId())) {
             roleRepo.findByCode(roleCode).ifPresent(role ->
                 userRepo.findById(req.getToUserId()).ifPresent(delegateUser -> {

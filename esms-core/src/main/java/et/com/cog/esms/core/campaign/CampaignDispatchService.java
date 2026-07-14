@@ -194,17 +194,26 @@ public class CampaignDispatchService {
     private void dispatchReminder(Reminder reminder) throws Exception {
         log.info("Evaluating reminder rule: id={}, name={}, triggerDays={}", reminder.getId(), reminder.getName(), reminder.getTriggerDays());
 
-        Template template = templateRepo.findById(reminder.getTemplateId())
-                .orElseThrow(() -> new IllegalArgumentException("Template not found for reminder: " + reminder.getTemplateId()));
+        // templateId is optional — a reminder can use customBody instead (see
+        // V020__make_reminder_template_nullable.sql and the create() validation
+        // that requires one or the other). This previously called findById(null)
+        // for any customBody-only reminder, which throws immediately and — since
+        // OutboxRelay.relay() aborts its whole batch on the first failure — left
+        // every subsequent outbox event permanently stuck behind it.
+        Template template = reminder.getTemplateId() != null
+                ? templateRepo.findById(reminder.getTemplateId()).orElse(null)
+                : null;
 
         String bodyTemplate = (reminder.getCustomBody() != null && !reminder.getCustomBody().trim().isEmpty())
                 ? reminder.getCustomBody()
-                : template.getBody();
+                : (template != null ? template.getBody() : "");
 
-        String encoding = template.getEncoding();
+        String encoding = (template != null) ? template.getEncoding() : "GSM7";
 
         Workspace workspace = workspaceRepo.findById(reminder.getWorkspaceId()).orElse(null);
-        String senderMask = (template.getSender() != null) ? template.getSender() : (workspace != null ? workspace.getSenderMask() : "NIB");
+        String senderMask = (template != null && template.getSender() != null)
+                ? template.getSender()
+                : (workspace != null ? workspace.getSenderMask() : "NIB");
 
         Map<String, RecipientInfo> recipients = new HashMap<>();
 
@@ -236,6 +245,7 @@ public class CampaignDispatchService {
 
             Message msg = Message.builder()
                     .workspaceId(reminder.getWorkspaceId())
+                    .reminderId(reminder.getId())
                     .contactId(recipient.getContactId())
                     .toNumber(recipient.getPhone())
                     .body(resolvedBody)

@@ -40,10 +40,24 @@ public class ContactGroupController {
     @PreAuthorize("hasAuthority('CONTACT_VIEW')")
     public ResponseEntity<List<GroupDto>> list(
             @RequestParam(required = false) String status) {
+        boolean isSuperAdmin = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"));
         UUID wsId = WorkspaceContext.currentWorkspaceId();
-        List<ContactGroup> groups = status != null
-                ? groupRepo.findByWorkspaceIdAndStatusOrderByCreatedAtDesc(wsId, status)
-                : groupRepo.findByWorkspaceIdAndStatusOrderByCreatedAtDesc(wsId, "ACTIVE");
+
+        List<ContactGroup> groups;
+        if (isSuperAdmin && wsId == null) {
+            // Platform-wide view: every workspace's groups. A super admin filtering
+            // by status still sees all workspaces; no status filter defaults to all
+            // (not just ACTIVE) so nothing is hidden from the platform view.
+            groups = status != null
+                    ? groupRepo.findByStatusOrderByCreatedAtDesc(status)
+                    : groupRepo.findAllByOrderByCreatedAtDesc();
+        } else {
+            groups = status != null
+                    ? groupRepo.findByWorkspaceIdAndStatusOrderByCreatedAtDesc(wsId, status)
+                    : groupRepo.findByWorkspaceIdAndStatusOrderByCreatedAtDesc(wsId, "ACTIVE");
+        }
         return ResponseEntity.ok(groups.stream().map(this::toDto).collect(Collectors.toList()));
     }
 

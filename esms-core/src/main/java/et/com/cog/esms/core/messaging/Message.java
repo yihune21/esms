@@ -24,6 +24,9 @@ public class Message {
     @Column(name = "campaign_id")
     private UUID campaignId;
 
+    @Column(name = "reminder_id")
+    private UUID reminderId;
+
     @Column(name = "contact_id")
     private UUID contactId;
 

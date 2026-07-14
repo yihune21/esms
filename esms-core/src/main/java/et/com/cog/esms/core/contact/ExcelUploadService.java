@@ -123,23 +123,6 @@ public class ExcelUploadService {
                     }
                     seenPhonesInBatch.add(phone);
 
-                    Optional<Contact> existingContact = contactRepo.findByWorkspaceIdAndPhoneE164(workspaceId, phone);
-
-                    if (existingContact.isPresent()) {
-                        duplicateCount++;
-                        if (groupId != null) {
-                            try {
-                                rowSaver.linkToGroupIfMissing(groupId, existingContact.get().getId());
-                            } catch (Exception e) {
-                                errorCount++;
-                                errors.add(Map.of("row", rowIdx + 1,
-                                        "error", "Failed to link existing contact to group: " + e.getMessage()));
-                                log.warn("Row {} failed to link duplicate contact to group: {}", rowIdx + 1, e.getMessage());
-                            }
-                        }
-                        continue;
-                    }
-
                     Map<String, String> extra = new LinkedHashMap<>();
                     for (int colIdx = 0; colIdx < headers.size(); colIdx++) {
                         if (colIdx != nameIdx && colIdx != phoneIdx) {
@@ -148,6 +131,21 @@ public class ExcelUploadService {
                                 extra.put(headers.get(colIdx), value);
                             }
                         }
+                    }
+
+                    Optional<Contact> existingContact = contactRepo.findByWorkspaceIdAndPhoneE164(workspaceId, phone);
+
+                    if (existingContact.isPresent()) {
+                        duplicateCount++;
+                        try {
+                            rowSaver.refreshContactRow(existingContact.get().getId(), name, extra, upload.getId(), groupId);
+                        } catch (Exception e) {
+                            errorCount++;
+                            errors.add(Map.of("row", rowIdx + 1,
+                                    "error", "Failed to refresh existing contact: " + e.getMessage()));
+                            log.warn("Row {} failed to refresh duplicate contact: {}", rowIdx + 1, e.getMessage());
+                        }
+                        continue;
                     }
 
                     rowSaver.saveContactRow(workspaceId, name, phone, extra, upload.getId(), groupId);

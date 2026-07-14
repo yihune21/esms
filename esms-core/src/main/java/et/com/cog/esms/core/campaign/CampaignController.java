@@ -1,8 +1,15 @@
 package et.com.cog.esms.core.campaign;
 
 import et.com.cog.esms.core.audit.AuditService;
+import et.com.cog.esms.core.contact.Contact;
+import et.com.cog.esms.core.contact.ContactRepository;
+import et.com.cog.esms.core.messaging.Message;
 import et.com.cog.esms.core.messaging.MessageRepository;
+import et.com.cog.esms.core.messaging.MessageRetryService;
 import et.com.cog.esms.core.security.WorkspaceContext;
+import et.com.cog.esms.core.template.Template;
+import et.com.cog.esms.core.template.TemplateRecipientRepository;
+import et.com.cog.esms.core.template.TemplateRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -29,6 +36,10 @@ public class CampaignController {
     private final CampaignRepository campaignRepo;
     private final et.com.cog.esms.core.identity.UserRepository userRepo;
     private final MessageRepository messageRepo;
+    private final ContactRepository contactRepo;
+    private final TemplateRepository templateRepo;
+    private final TemplateRecipientRepository templateRecipientRepo;
+    private final MessageRetryService retryService;
     private final AuditService auditService;
 
     @GetMapping
@@ -145,6 +156,118 @@ public class CampaignController {
         return ResponseEntity.ok(toDto(rejected));
     }
 
+    // Actual recipients this campaign has messaged so far once it has
+    // dispatched. Pre-dispatch (or if it never dispatches, e.g. rejected),
+    // falls back to the live membership of whatever source — recipient
+    // group, one-off upload, or template — the campaign is configured to
+    // send from, so recipients are visible and searchable before it sends.
+    @GetMapping("/{id}/recipients")
+    @PreAuthorize("hasAuthority('CAMPAIGN_VIEW')")
+    public ResponseEntity<?> recipients(@PathVariable UUID id) {
+        Campaign campaign = campaignRepo.findById(id).orElse(null);
+        if (campaign == null) {
+            return ResponseEntity.notFound().build();
+        }
+        List<Message> messages = messageRepo.findByCampaignId(id);
+        if (!messages.isEmpty()) {
+            Map<UUID, String> namesByContact = contactRepo
+                    .findAllById(messages.stream().map(Message::getContactId).filter(java.util.Objects::nonNull).collect(Collectors.toList()))
+                    .stream()
+                    .collect(Collectors.toMap(Contact::getId, Contact::getName, (a, b) -> a));
+            List<RecipientDto> result = messages.stream()
+                    .map(m -> new RecipientDto(m.getId(), m.getToNumber(),
+                            m.getContactId() != null ? namesByContact.get(m.getContactId()) : null,
+                            m.getStatus(), m.getErrorCode()))
+                    .collect(Collectors.toList());
+            return ResponseEntity.ok(result);
+        }
+        return ResponseEntity.ok(resolvePreDispatchRecipients(
+                campaign.getRecipientGroupId(), campaign.getUploadId(), campaign.getTemplateId()));
+    }
+
+    // Manual retry for messages whose delivery terminally failed
+    // (FAILED/EXPIRED). With a messageId in the body, retries just that one
+    // recipient; without one, retries every failed message of the campaign.
+    // No re-approval: the content and audience were already approved — this
+    // only re-sends what that approval covered.
+    @PostMapping("/{id}/retry-failed")
+    @PreAuthorize("hasAnyAuthority('CAMPAIGN_SUBMIT','CAMPAIGN_APPROVE')")
+    public ResponseEntity<?> retryFailed(@PathVariable UUID id,
+                                         @RequestBody(required = false) RetryRequest req) {
+        UUID wsId = WorkspaceContext.currentWorkspaceId();
+        Campaign campaign = campaignRepo.findById(id).orElse(null);
+        if (campaign == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        List<Message> candidates;
+        if (req != null && req.getMessageId() != null) {
+            Message m = messageRepo.findById(req.getMessageId()).orElse(null);
+            if (m == null || !id.equals(m.getCampaignId())) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("title", "Message does not belong to this campaign"));
+            }
+            if (!MessageRetryService.isRetryable(m)) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(Map.of("title", "Only failed messages can be retried"));
+            }
+            // Correct the destination number in place, then re-send just this one.
+            if (req.getNewNumber() != null && !req.getNewNumber().isBlank()) {
+                retryService.retryToNewNumber(m, req.getNewNumber(),
+                        campaign.getTemplateId(), campaign.getWorkspaceId(), campaign.getId().toString());
+                auditService.log(wsId, "CAMPAIGN", "INFO", "CAMPAIGN_RETRY_NEW_NUMBER", "Campaign", id);
+                return ResponseEntity.ok(Map.of("retried", 1, "campaign", toDto(campaign)));
+            }
+            candidates = List.of(m);
+        } else {
+            candidates = messageRepo.findByCampaignId(id).stream()
+                    .filter(MessageRetryService::isRetryable)
+                    .collect(Collectors.toList());
+            if (candidates.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(Map.of("title", "This campaign has no failed messages to retry"));
+            }
+        }
+
+        int retried = retryService.retryMessages(candidates,
+                campaign.getTemplateId(), campaign.getWorkspaceId(), campaign.getId().toString());
+
+        auditService.log(wsId, "CAMPAIGN", "INFO", "CAMPAIGN_RETRY_FAILED", "Campaign", id);
+
+        return ResponseEntity.ok(Map.of("retried", retried, "campaign", toDto(campaign)));
+    }
+
+    // Shared by /recipients and the recipientCount fallback in toDto(): the
+    // live membership of a group/upload/template source, used whenever there
+    // are no dispatched messages yet to read the real recipient list from
+    // (status null — nothing sent to them yet).
+    private List<RecipientDto> resolvePreDispatchRecipients(UUID groupId, UUID uploadId, UUID templateId) {
+        if (groupId != null) {
+            return contactRepo.findActiveByGroupId(groupId).stream()
+                    .map(c -> new RecipientDto(null, c.getPhoneE164(), c.getName(), null, null))
+                    .collect(Collectors.toList());
+        }
+        if (uploadId != null) {
+            return contactRepo.findByUploadIdAndStatus(uploadId, "ACTIVE").stream()
+                    .map(c -> new RecipientDto(null, c.getPhoneE164(), c.getName(), null, null))
+                    .collect(Collectors.toList());
+        }
+        if (templateId != null) {
+            Template tmpl = templateRepo.findById(templateId).orElse(null);
+            if (tmpl != null) {
+                if (tmpl.getRecipientGroupId() != null) {
+                    return contactRepo.findActiveByGroupId(tmpl.getRecipientGroupId()).stream()
+                            .map(c -> new RecipientDto(null, c.getPhoneE164(), c.getName(), null, null))
+                            .collect(Collectors.toList());
+                }
+                return templateRecipientRepo.findByTemplateId(tmpl.getId()).stream()
+                        .map(r -> new RecipientDto(null, r.getPhoneE164(), r.getName(), null, null))
+                        .collect(Collectors.toList());
+            }
+        }
+        return List.of();
+    }
+
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('CAMPAIGN_DRAFT')")
     public ResponseEntity<CampaignDto> update(@PathVariable UUID id,
@@ -192,9 +315,22 @@ public class CampaignController {
         double rate     = (sent + delivered) > 0
                 ? Math.round(1000.0 * delivered / (sent + delivered)) / 10.0 : 0.0;
 
+        // recipientCount is only ever written post-dispatch (see
+        // CampaignDispatchService) — before that, fall back to a live count
+        // of the configured group/upload so it's never wrongly reported as
+        // unknown just because the campaign hasn't sent yet.
+        Integer recipientCount = c.getRecipientCount();
+        if (recipientCount == null) {
+            if (c.getRecipientGroupId() != null) {
+                recipientCount = contactRepo.findActiveByGroupId(c.getRecipientGroupId()).size();
+            } else if (c.getUploadId() != null) {
+                recipientCount = contactRepo.findByUploadIdAndStatus(c.getUploadId(), "ACTIVE").size();
+            }
+        }
+
         return new CampaignDto(c.getId(), c.getName(), c.getKind(), c.getStatus(),
                 c.getTemplateId(), c.getCustomBody(), c.getRecipientGroupId(), c.getUploadId(),
-                c.getRecipientCount(), c.getScheduledAt(), c.getCreatedBy(), creatorName,
+                recipientCount, c.getScheduledAt(), c.getCreatedBy(), creatorName,
                 c.getCreatedAt(), c.getWorkspaceId(),
                 total, delivered, failed, rate);
     }
@@ -243,6 +379,16 @@ public class CampaignController {
     @Data
     public static class NoteRequest {
         private String note;
+    }
+
+    record RecipientDto(UUID messageId, String phone, String name, String status, String errorCode) {}
+
+    @Data
+    public static class RetryRequest {
+        private UUID messageId;
+        // When set (single-message retry only), the message is re-sent to this
+        // corrected number instead of the original.
+        private String newNumber;
     }
 
     @Data @AllArgsConstructor

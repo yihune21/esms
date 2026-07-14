@@ -185,6 +185,15 @@ public class ReportController {
                 ? userRepo.count()
                 : memberRepo.countByWorkspaceId(wsId);
 
+        // Today's send volume vs the workspace's daily cap, for the dashboard
+        // usage bar. Counts every message created since midnight (UTC).
+        Instant startOfDay    = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
+                .atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
+        long todayMessages    = messageRepo.countFiltered(wsId, startOfDay, null, null, null, null);
+        Integer dailySmsLimit = wsId != null
+                ? workspaceRepo.findById(wsId).map(w -> w.getDailySmsLimit()).orElse(null)
+                : null;
+
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("totalMessages",    totalMessages);
         summary.put("sentMessages",     sent);
@@ -195,6 +204,8 @@ public class ReportController {
         summary.put("activeWorkspaces", activeWorkspaces);
         summary.put("activeUsers30d",   activeUsers30d);
         summary.put("totalUsers",       totalUsers);
+        summary.put("todayMessages",    todayMessages);
+        summary.put("dailySmsLimit",    dailySmsLimit);
         summary.put("workspaceId",      wsId);
 
         return ResponseEntity.ok(summary);
