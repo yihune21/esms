@@ -3,16 +3,22 @@ package et.com.cog.esms.core.reminder;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
 import java.util.UUID;
 
-
+/**
+ * A reusable reminder definition: name, message, and days-left rule. Users
+ * create/edit/activate/deactivate these freely — no approval. Actually sending
+ * one (with uploaded policy data) creates a separate, approval-gated Reminder
+ * run (the `schedule` table) that references this template.
+ */
 @Entity
-@Table(name = "schedule")
+@Table(name = "reminder_template")
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor @Builder
-public class Reminder {
+public class ReminderTemplate {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -24,47 +30,31 @@ public class Reminder {
     @Column(nullable = false)
     private String name;
 
-  
-    @Column(name = "recipient_group_id")
-    private UUID recipientGroupId;
-
-    @Column(name = "upload_id")
-    private UUID uploadId;
-
     @Column(name = "custom_body")
     private String customBody;
 
+    // Optional reference to an approved message Template (templates table).
+    @Column(name = "template_id")
+    private UUID templateId;
 
     @Column(name = "trigger_days", nullable = false)
     private Integer triggerDays;
 
- 
     @Column(nullable = false)
     private String kind;
 
-    @Column(name = "template_id")
-    private UUID templateId;
-
-    // The reminder template this run was sent from (snapshot of its fields
-    // lives in the columns above so a later template edit can't change what
-    // was approved).
-    @Column(name = "reminder_template_id")
-    private UUID reminderTemplateId;
+    // ACTIVE | INACTIVE — a deactivated template can't be used to send.
+    @Column(nullable = false)
+    private String status;
 
     @Column(name = "created_by")
     private UUID createdBy;
 
-
-    @Column(nullable = false)
-    private String status;
-
-    @Column(name = "fired_at")
-    private Instant firedAt;
-
-    @Column(name = "cancelled_at")
-    private Instant cancelledAt;
-
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 }

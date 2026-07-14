@@ -7,6 +7,7 @@ import et.com.cog.esms.core.messaging.OutboxEvent;
 import et.com.cog.esms.core.messaging.OutboxEventRepository;
 import et.com.cog.esms.core.security.WorkspaceContext;
 import et.com.cog.esms.core.workspace.Workspace;
+import et.com.cog.esms.core.workspace.WorkspacePermissionRepository;
 import et.com.cog.esms.core.workspace.WorkspaceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,36 +27,39 @@ public class CampaignService {
     private final CampaignRepository campaignRepo;
     private final ApprovalRepository approvalRepo;
     private final WorkspaceRepository workspaceRepo;
+    private final WorkspacePermissionRepository workspacePermissionRepo;
     private final OutboxEventRepository outboxRepo;
     private final ObjectMapper objectMapper;
     private final AuditService auditService;
 
 
+    // Keyed by the FROM state only, deliberately tier-agnostic. The tier
+    // (one- vs two-step approval) decides which TARGET a submit/approve aims
+    // for — but validation must accept a state that belonged to the other
+    // tier, because a workspace's delegation setting can be toggled while a
+    // campaign is mid-flight. A campaign submitted as PENDING_HEAD (two-tier)
+    // must still be approvable straight to APPROVED after delegation is turned
+    // off, and a PENDING_APPROVAL (one-tier) campaign must stay valid if
+    // delegation is later turned on. So PENDING_HEAD allows BOTH PENDING_CEO
+    // (still two-tier) and APPROVED (now one-tier); the caller picks which.
     private static final Map<String, Set<String>> TRANSITIONS = Map.ofEntries(
-        Map.entry("UNDERWRITING:DRAFT",            Set.of("PENDING_APPROVAL")),
-        Map.entry("CLAIMS:DRAFT",                  Set.of("PENDING_APPROVAL")),
-        Map.entry("MARKETING:DRAFT",               Set.of("PENDING_APPROVAL")),
-        Map.entry("GENERIC:DRAFT",                 Set.of("PENDING_APPROVAL")),
-        Map.entry("UNDERWRITING:PENDING_APPROVAL",  Set.of("APPROVED", "DRAFT")),
-        Map.entry("CLAIMS:PENDING_APPROVAL",        Set.of("APPROVED", "DRAFT")),
-        Map.entry("MARKETING:PENDING_APPROVAL",     Set.of("APPROVED", "DRAFT")),
-        Map.entry("GENERIC:PENDING_APPROVAL",       Set.of("APPROVED", "DRAFT")),
-
-        Map.entry("FINANCE:DRAFT",           Set.of("PENDING_HEAD")),
-        Map.entry("FINANCE:PENDING_HEAD",    Set.of("PENDING_CEO", "DRAFT")),
-        Map.entry("FINANCE:PENDING_CEO",     Set.of("APPROVED", "DRAFT")),
-
-        Map.entry("UNDERWRITING:APPROVED",   Set.of("CANCELLED")),
-        Map.entry("UNDERWRITING:QUEUED",     Set.of("CANCELLED")),
-        Map.entry("CLAIMS:APPROVED",         Set.of("CANCELLED")),
-        Map.entry("CLAIMS:QUEUED",           Set.of("CANCELLED")),
-        Map.entry("MARKETING:APPROVED",      Set.of("CANCELLED")),
-        Map.entry("MARKETING:QUEUED",        Set.of("CANCELLED")),
-        Map.entry("GENERIC:APPROVED",        Set.of("CANCELLED")),
-        Map.entry("GENERIC:QUEUED",          Set.of("CANCELLED")),
-        Map.entry("FINANCE:APPROVED",        Set.of("CANCELLED")),
-        Map.entry("FINANCE:QUEUED",          Set.of("CANCELLED"))
+        Map.entry("DRAFT",            Set.of("PENDING_APPROVAL", "PENDING_HEAD")),
+        Map.entry("PENDING_APPROVAL", Set.of("APPROVED", "DRAFT")),
+        Map.entry("PENDING_HEAD",     Set.of("PENDING_CEO", "APPROVED", "DRAFT")),
+        Map.entry("PENDING_CEO",      Set.of("APPROVED", "DRAFT")),
+        Map.entry("APPROVED",         Set.of("CANCELLED", "QUEUED")),
+        Map.entry("QUEUED",           Set.of("CANCELLED", "COMPLETED"))
     );
+
+    // Tiering is decided by whether the workspace has the DELEGATION feature
+    // enabled (workspace_permission), not by workspace kind — kind is just a
+    // department tag and every workspace created through the app defaults to
+    // "GENERIC", so kind-based tiering meant the two-tier chain was only ever
+    // reachable for the one seeded kind="FINANCE" workspace, regardless of
+    // whether an admin had actually turned delegation on.
+    private boolean isTwoTier(Workspace ws) {
+        return workspacePermissionRepo.existsByWorkspaceIdAndPermissionCode(ws.getId(), "DELEGATION");
+    }
 
     @Transactional
     public Campaign create(UUID workspaceId, String name, String kind,
@@ -108,12 +112,10 @@ public class CampaignService {
         Workspace ws = workspaceRepo.findById(c.getWorkspaceId())
                 .orElseThrow(() -> new IllegalStateException("Workspace not found"));
 
-        // Tiering is decided solely by workspace kind: FINANCE is two-tier (Head -> CEO),
-        // every other workspace is one-tier Maker-Checker. Delegation never changes the tier.
-        boolean twoTier = "FINANCE".equals(ws.getKind());
+        boolean twoTier = isTwoTier(ws);
 
         String targetState = twoTier ? "PENDING_HEAD" : "PENDING_APPROVAL";
-        validateTransition(ws.getKind(), c.getStatus(), targetState);
+        validateTransition(c.getStatus(), targetState);
 
         recordApproval(c, c.getStatus(), targetState, null);
         c.setStatus(targetState);
@@ -131,7 +133,7 @@ public class CampaignService {
         Workspace ws = workspaceRepo.findById(c.getWorkspaceId())
                 .orElseThrow(() -> new IllegalStateException("Workspace not found"));
 
-        boolean twoTier = "FINANCE".equals(ws.getKind());
+        boolean twoTier = isTwoTier(ws);
         UUID actorId = WorkspaceContext.currentUserId();
 
         
@@ -157,42 +159,78 @@ public class CampaignService {
             throw new IllegalStateException("Campaign is not in an approvable state: " + c.getStatus());
         }
 
-        validateTransition(ws.getKind(), c.getStatus(), targetState);
+        validateTransition(c.getStatus(), targetState);
         recordApproval(c, c.getStatus(), targetState, note);
         c.setStatus(targetState);
         Campaign saved = campaignRepo.save(c);
 
-        if ("APPROVED".equals(targetState) && "INSTANT".equals(saved.getKind())) {
-            try {
-                Map<String, Object> payload = new HashMap<>();
-                payload.put("campaignId",  saved.getId().toString());
-                payload.put("workspaceId", saved.getWorkspaceId().toString());
-                if (saved.getTemplateId()        != null) payload.put("templateId",      saved.getTemplateId().toString());
-                if (saved.getCustomBody()        != null) payload.put("customBody",       saved.getCustomBody());
-                if (saved.getRecipientGroupId()  != null) payload.put("recipientGroupId", saved.getRecipientGroupId().toString());
-                if (saved.getUploadId()          != null) payload.put("uploadId",         saved.getUploadId().toString());
-                payload.put("kind", saved.getKind());
-
-                String json = objectMapper.writeValueAsString(payload);
-                OutboxEvent event = OutboxEvent.builder()
-                        .aggregateType("campaign")
-                        .aggregateId(saved.getId())
-                        .eventType("ScheduledFire")
-                        .payload(json)
-                        .createdAt(Instant.now())
-                        .build();
-                outboxRepo.save(event);
-
-                saved.setStatus("QUEUED");
-                saved = campaignRepo.save(saved);
-                log.info("Instant campaign queued immediately: id={}", saved.getId());
-            } catch (JsonProcessingException e) {
-                log.error("Failed to serialize payload for instant campaign id={}: {}", saved.getId(), e.getMessage(), e);
-            }
+        if ("APPROVED".equals(targetState)) {
+            saved = queueIfInstant(saved);
         }
         auditService.log(saved.getWorkspaceId(), "CAMPAIGN", "INFO",
                 "CAMPAIGN_APPROVED_TO_" + saved.getStatus(), "Campaign", saved.getId());
         return saved;
+    }
+
+    // Once a campaign reaches APPROVED, an INSTANT one is queued to send right
+    // away (SCHEDULED ones wait for the poller). Shared by approve() and the
+    // delegation-disabled finalizer so both queue identically.
+    private Campaign queueIfInstant(Campaign saved) {
+        if (!"INSTANT".equals(saved.getKind())) return saved;
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("campaignId",  saved.getId().toString());
+            payload.put("workspaceId", saved.getWorkspaceId().toString());
+            if (saved.getTemplateId()        != null) payload.put("templateId",      saved.getTemplateId().toString());
+            if (saved.getCustomBody()        != null) payload.put("customBody",       saved.getCustomBody());
+            if (saved.getRecipientGroupId()  != null) payload.put("recipientGroupId", saved.getRecipientGroupId().toString());
+            if (saved.getUploadId()          != null) payload.put("uploadId",         saved.getUploadId().toString());
+            payload.put("kind", saved.getKind());
+
+            String json = objectMapper.writeValueAsString(payload);
+            OutboxEvent event = OutboxEvent.builder()
+                    .aggregateType("campaign")
+                    .aggregateId(saved.getId())
+                    .eventType("ScheduledFire")
+                    .payload(json)
+                    .createdAt(Instant.now())
+                    .build();
+            outboxRepo.save(event);
+
+            saved.setStatus("QUEUED");
+            saved = campaignRepo.save(saved);
+            log.info("Instant campaign queued immediately: id={}", saved.getId());
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize payload for instant campaign id={}: {}", saved.getId(), e.getMessage(), e);
+        }
+        return saved;
+    }
+
+    /**
+     * Graceful teardown of the delegate approval tier. When a workspace turns
+     * delegation OFF, any campaign sitting in PENDING_CEO has already cleared
+     * head review and was only waiting on a delegate who no longer exists —
+     * leaving it stuck forever. Finalize those to APPROVED (queuing instant
+     * ones), so disabling delegation can never orphan an in-flight campaign.
+     * Returns how many were finalized.
+     */
+    @Transactional
+    public int finalizePendingDelegateApprovals(UUID workspaceId) {
+        List<Campaign> stuck = campaignRepo.findByWorkspaceIdAndStatus(workspaceId, "PENDING_CEO");
+        for (Campaign c : stuck) {
+            validateTransition(c.getStatus(), "APPROVED");
+            recordApproval(c, c.getStatus(), "APPROVED",
+                    "Delegate sign-off removed — auto-finalized after head approval");
+            c.setStatus("APPROVED");
+            Campaign saved = queueIfInstant(campaignRepo.save(c));
+            auditService.log(saved.getWorkspaceId(), "CAMPAIGN", "INFO",
+                    "CAMPAIGN_AUTO_FINALIZED_DELEGATION_OFF", "Campaign", saved.getId());
+        }
+        if (!stuck.isEmpty()) {
+            log.info("Delegation disabled for workspace {}: finalized {} PENDING_CEO campaign(s)",
+                    workspaceId, stuck.size());
+        }
+        return stuck.size();
     }
 
     @Transactional
@@ -200,10 +238,7 @@ public class CampaignService {
         Campaign c = campaignRepo.findById(campaignId)
                 .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
 
-        Workspace ws = workspaceRepo.findById(c.getWorkspaceId())
-                .orElseThrow(() -> new IllegalStateException("Workspace not found"));
-
-        validateTransition(ws.getKind(), c.getStatus(), "DRAFT");
+        validateTransition(c.getStatus(), "DRAFT");
         recordApproval(c, c.getStatus(), "DRAFT", note);
         c.setStatus("DRAFT");
         Campaign saved = campaignRepo.save(c);
@@ -243,10 +278,7 @@ public class CampaignService {
         Campaign c = campaignRepo.findById(campaignId)
                 .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
 
-        Workspace ws = workspaceRepo.findById(c.getWorkspaceId())
-                .orElseThrow(() -> new IllegalStateException("Workspace not found"));
-
-        validateTransition(ws.getKind(), c.getStatus(), "CANCELLED");
+        validateTransition(c.getStatus(), "CANCELLED");
         recordApproval(c, c.getStatus(), "CANCELLED", note);
         c.setStatus("CANCELLED");
         c.setCompletedAt(Instant.now());
@@ -298,17 +330,11 @@ public class CampaignService {
     }
 
 
-    private void validateTransition(String wsKind, String fromState, String toState) {
-        // FINANCE follows the two-tier (Head -> CEO) chain; every other workspace kind
-        // follows its own one-tier Maker-Checker chain. No delegation-driven tiering.
-        String effectiveKind = "FINANCE".equals(wsKind) ? "FINANCE" : wsKind;
-
-        String key = effectiveKind + ":" + fromState;
-        Set<String> allowed = TRANSITIONS.get(key);
+    private void validateTransition(String fromState, String toState) {
+        Set<String> allowed = TRANSITIONS.get(fromState);
         if (allowed == null || !allowed.contains(toState)) {
             throw new IllegalStateException(
-                    String.format("Illegal transition %s → %s for workspace kind %s",
-                            fromState, toState, wsKind));
+                    String.format("Illegal transition %s → %s", fromState, toState));
         }
     }
 

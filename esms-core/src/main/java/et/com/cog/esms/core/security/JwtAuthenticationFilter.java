@@ -4,6 +4,7 @@ import et.com.cog.esms.core.identity.Delegation;
 import et.com.cog.esms.core.identity.DelegationRepository;
 import et.com.cog.esms.core.identity.WorkspaceMemberRepository;
 import et.com.cog.esms.core.workspace.RoleRepository;
+import et.com.cog.esms.core.workspace.WorkspaceRepository;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -37,6 +38,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final DelegationRepository      delegationRepo;
     private final RoleRepository            roleRepo;
     private final WorkspaceMemberRepository memberRepo;
+    private final WorkspaceRepository       workspaceRepo;
 
     private static final String BEARER_PREFIX  = "Bearer ";
     private static final String DENYLIST_PREFIX = "jwt:deny:";
@@ -109,6 +111,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String effectiveRoleCode = isDbSuperAdmin ? "SUPER_ADMIN" : roleCode;
+
+        // A deactivated workspace must lock out every one of its members
+        // immediately, not just on their next login — this runs on every
+        // request, so an already-issued access token stops working the moment
+        // the workspace is suspended. /auth/logout is exempt so a locked-out
+        // user can still cleanly end their session.
+        boolean exemptFromLockout = request.getRequestURI().endsWith("/auth/logout");
+        if (!exemptFromLockout && workspaceId != null && !"SUPER_ADMIN".equals(effectiveRoleCode)) {
+            boolean suspended = workspaceRepo.findById(workspaceId)
+                    .map(w -> !"ACTIVE".equals(w.getStatus()))
+                    .orElse(false);
+            if (suspended) {
+                response.setStatus(403);
+                response.setContentType("application/problem+json");
+                response.getWriter().write(
+                        "{\"type\":\"/errors/auth\",\"status\":403,\"code\":\"WORKSPACE_DEACTIVATED\","
+                                + "\"title\":\"Your workspace has been deactivated. Contact your administrator.\"}");
+                return;
+            }
+        }
 
         boolean isDelegating = false;
         try {

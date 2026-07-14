@@ -32,6 +32,18 @@ public class Workspace {
 
     private String division;
 
+    // Branch hierarchy. A "branch" (child) sets parentWorkspaceId to its
+    // umbrella and behaves like a standalone workspace (own members, campaigns,
+    // contacts) while inheriting the umbrella's feature permissions. An umbrella
+    // (isBranchParent = true) owns branches and holds no data of its own; it
+    // must always have ≥1 branch.
+    @Column(name = "parent_workspace_id")
+    private UUID parentWorkspaceId;
+
+    @Column(name = "is_branch_parent", nullable = false)
+    @Builder.Default
+    private boolean isBranchParent = false;
+
     @Column(name = "sender_mask")
     private String senderMask;
 

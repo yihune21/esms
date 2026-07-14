@@ -15,5 +15,4 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
     List<Role> findByScope(String scope);
 
     List<Role> findByStatus(String status);
-    List<Role> findByUserId(UUID id);
 }

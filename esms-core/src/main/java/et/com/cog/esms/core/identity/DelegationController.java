@@ -102,8 +102,9 @@ public class DelegationController {
         Delegation saved = delegationRepo.save(delegation);
 
         boolean grantedMembership = false;
-        var delegatorUserRole = roleRepo.findByUserId(fromUserId);
-        var roleCode = delegatorUserRole.get(0).getCode();
+        var delegatorMembership = memberRepo.findByWorkspaceIdAndUserId(wsId, fromUserId)
+                .orElseThrow(() -> new IllegalStateException("Delegator is not a member of this workspace"));
+        var roleCode = delegatorMembership.getRole().getCode();
         if (!memberRepo.existsByWorkspaceIdAndUserId(wsId, req.getToUserId())) {
             roleRepo.findByCode(roleCode).ifPresent(role ->
                 userRepo.findById(req.getToUserId()).ifPresent(delegateUser -> {

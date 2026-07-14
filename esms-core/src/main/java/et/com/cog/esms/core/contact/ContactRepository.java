@@ -22,5 +22,16 @@ public interface ContactRepository extends JpaRepository<Contact, UUID> {
     )
     List<Contact> findActiveByGroupId(@org.springframework.data.repository.query.Param("groupId") UUID groupId);
 
-    List<Contact> findByUploadIdAndStatus(UUID uploadId, String status);
+    // Resolves an upload's contacts through the contact_upload_link join table
+    // (not the legacy contact.upload_id column) so a contact re-seen in a later
+    // upload still stays reachable from THIS upload's campaign/reminder. Keeps
+    // the same signature so every caller (dispatch, recipient preview, counts)
+    // is fixed at once.
+    @org.springframework.data.jpa.repository.Query(
+        "SELECT c FROM Contact c WHERE c.status = :status AND c.id IN " +
+        "(SELECT l.contactId FROM ContactUploadLink l WHERE l.uploadId = :uploadId)"
+    )
+    List<Contact> findByUploadIdAndStatus(
+        @org.springframework.data.repository.query.Param("uploadId") UUID uploadId,
+        @org.springframework.data.repository.query.Param("status") String status);
 }

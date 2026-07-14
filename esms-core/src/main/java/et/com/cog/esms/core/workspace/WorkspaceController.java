@@ -1,5 +1,6 @@
 package et.com.cog.esms.core.workspace;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import et.com.cog.esms.core.identity.UserRepository;
 import et.com.cog.esms.core.identity.WorkspaceMember;
 import et.com.cog.esms.core.identity.WorkspaceMemberRepository;
@@ -30,6 +31,7 @@ public class WorkspaceController {
     private final UserRepository userRepo;
     private final WorkspaceMemberRepository memberRepo;
     private final WorkspacePermissionRepository permissionRepo;
+    private final et.com.cog.esms.core.campaign.CampaignService campaignService;
 
     @GetMapping
     @PreAuthorize("hasAuthority('WORKSPACE_VIEW')")
@@ -60,21 +62,88 @@ public class WorkspaceController {
 
     @PostMapping
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Transactional
     public ResponseEntity<?> create(@Valid @RequestBody CreateWorkspaceRequest req) {
         if (workspaceRepo.existsByCode(req.getCode())) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("title", "Workspace code already exists"));
         }
 
-        Workspace ws = Workspace.builder()
-                .code(req.getCode())
-                .name(req.getName())
-                .kind(req.getKind() != null ? req.getKind() : "GENERIC")
-                .division(req.getDivision())
-                .status("ACTIVE")
-                .build();
+        // ── Case 1: a branch under an existing umbrella ───────────────────────
+        // A branch behaves like a standalone workspace (own admin, members,
+        // data) but inherits the umbrella's feature permissions, so it never
+        // carries its own permission rows.
+        if (req.getParentWorkspaceId() != null) {
+            Workspace parent = workspaceRepo.findById(req.getParentWorkspaceId()).orElse(null);
+            if (parent == null || !parent.isBranchParent()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("title", "Parent must be an existing branch workspace"));
+            }
+            if (req.getAdminUserId() == null) {
+                return ResponseEntity.badRequest().body(Map.of("title", "A branch needs an admin"));
+            }
+            String memberGuard = adminMembershipConflict(req.getAdminUserId());
+            if (memberGuard != null) return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("title", memberGuard));
 
-        Workspace savedWs = workspaceRepo.save(ws);
+            // Daily SMS limit lives on the umbrella, not the branch — and a
+            // branch can never have its own delegate sign-off, regardless of
+            // whether the umbrella has the DELEGATION feature.
+            Workspace branch = workspaceRepo.save(Workspace.builder()
+                    .code(req.getCode()).name(req.getName())
+                    .kind(parent.getKind()).division(req.getDivision())
+                    .parentWorkspaceId(parent.getId()).isBranchParent(false)
+                    .status("ACTIVE").build());
+            assignAdmin(branch, req.getAdminUserId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(toDtoEnriched(branch, parentPermissions(parent)));
+        }
+
+        // ── Case 2: an umbrella + its mandatory first branch, atomically ──────
+        if (req.isBranchParent()) {
+            if (req.getFirstBranchName() == null || req.getFirstBranchName().isBlank()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("title", "A branch workspace must be created with at least one branch"));
+            }
+            if (req.getFirstBranchAdminUserId() == null) {
+                return ResponseEntity.badRequest().body(Map.of("title", "The first branch needs an admin"));
+            }
+            String memberGuard = adminMembershipConflict(req.getFirstBranchAdminUserId());
+            if (memberGuard != null) return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("title", memberGuard));
+
+            // The umbrella holds the daily limit for all its branches, and can
+            // never carry the DELEGATION feature — a branch-workspace (and its
+            // branches) never gets a delegate sign-off seat.
+            Workspace umbrella = workspaceRepo.save(Workspace.builder()
+                    .code(req.getCode()).name(req.getName())
+                    .kind(req.getKind() != null ? req.getKind() : "GENERIC")
+                    .division(req.getDivision()).dailySmsLimit(req.getDailySmsLimit())
+                    .isBranchParent(true)
+                    .status("ACTIVE").build());
+            List<String> perms = req.getPermissions() != null
+                    ? req.getPermissions().stream().filter(p -> !"DELEGATION".equals(p)).toList()
+                    : List.of();
+            for (String perm : perms) permissionRepo.save(new WorkspacePermission(umbrella.getId(), perm));
+
+            Workspace branch = workspaceRepo.save(Workspace.builder()
+                    .code(deriveBranchCode(req.getCode(), req.getFirstBranchName()))
+                    .name(req.getFirstBranchName())
+                    .kind(umbrella.getKind())
+                    .parentWorkspaceId(umbrella.getId()).isBranchParent(false)
+                    .status("ACTIVE").build());
+            assignAdmin(branch, req.getFirstBranchAdminUserId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(toDtoEnriched(umbrella, perms));
+        }
+
+        // ── Case 3: a standalone workspace (original behaviour) ───────────────
+        if (req.getAdminUserId() != null) {
+            String memberGuard = adminMembershipConflict(req.getAdminUserId());
+            if (memberGuard != null) return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("title", memberGuard));
+        }
+
+        Workspace savedWs = workspaceRepo.save(Workspace.builder()
+                .code(req.getCode()).name(req.getName())
+                .kind(req.getKind() != null ? req.getKind() : "GENERIC")
+                .division(req.getDivision()).dailySmsLimit(req.getDailySmsLimit())
+                .status("ACTIVE").build());
 
         if (req.getPermissions() != null) {
             for (String perm : req.getPermissions()) {
@@ -82,46 +151,82 @@ public class WorkspaceController {
             }
         }
 
-        var userWs = memberRepo.findByUserId(req.getAdminUserId());
-        var hasWs = userWs.size() > 0 ? true : false;
-        if(hasWs){
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("title",
-                            "Cannot assign a user that has a another workspace.")); 
-        }
-                    
-        if (req.getAdminUserId() != null) {
-            roleRepo.findByCode("DEPT_HEAD").ifPresent(role -> {
-                userRepo.findById(req.getAdminUserId()).ifPresent(user -> {
-                    memberRepo.save(WorkspaceMember.builder()
-                            .workspace(savedWs)
-                            .user(user)
-                            .role(role)
-                            .assignedAt(java.time.Instant.now())
-                            .assignedBy(WorkspaceContext.currentUserId())
-                            .build());
-                });
-            });
-        }
+        assignAdmin(savedWs, req.getAdminUserId());
 
         boolean hasDelegation = req.getPermissions() != null && req.getPermissions().contains("DELEGATION");
-        if (hasDelegation && req.getDelegateUserId() != null) {
-            roleRepo.findByCode("CEO").ifPresentOrElse(
-                ceoRole -> userRepo.findById(req.getDelegateUserId()).ifPresent(user ->
-                    memberRepo.save(WorkspaceMember.builder()
-                            .workspace(savedWs)
-                            .user(user)
-                            .role(ceoRole)
-                            .assignedAt(java.time.Instant.now())
-                            .assignedBy(WorkspaceContext.currentUserId())
-                            .build())),
-                () -> log.warn("CEO role not found — delegate {} not assigned for workspace {}",
-                        req.getDelegateUserId(), savedWs.getId())
-            );
-        }
+        assignDelegate(savedWs, req.getDelegateUserId(), hasDelegation);
 
         List<String> savedPerms = req.getPermissions() != null ? req.getPermissions() : List.of();
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(savedWs, savedPerms));
+    }
+
+    // Enforces single membership for a workspace admin: null == ok, else the
+    // reason to reject. A user already in any workspace can't be made a new
+    // workspace's admin.
+    private String adminMembershipConflict(UUID adminUserId) {
+        if (adminUserId == null) return null;
+        return memberRepo.findByUserId(adminUserId).isEmpty()
+                ? null : "Cannot assign a user that already belongs to another workspace.";
+    }
+
+    private void assignAdmin(Workspace ws, UUID adminUserId) {
+        if (adminUserId == null) return;
+        roleRepo.findByCode("DEPT_HEAD").ifPresent(role ->
+                userRepo.findById(adminUserId).ifPresent(user ->
+                        memberRepo.save(WorkspaceMember.builder()
+                                .workspace(ws).user(user).role(role)
+                                .assignedAt(Instant.now())
+                                .assignedBy(WorkspaceContext.currentUserId()).build())));
+    }
+
+    // Adds a delegate (CEO role) when the workspace has the DELEGATION feature.
+    // A delegate must be an unassigned user or an existing member of THIS
+    // workspace (promoted in place) — never pulled from another workspace, and
+    // never the workspace's own head.
+    private void assignDelegate(Workspace ws, UUID delegateUserId, boolean delegationEnabled) {
+        if (!delegationEnabled || delegateUserId == null) return;
+        var existingHere = memberRepo.findByWorkspaceIdAndUserId(ws.getId(), delegateUserId);
+        boolean inAnotherWs = memberRepo.findByUserId(delegateUserId).stream()
+                .anyMatch(m -> !m.getWorkspace().getId().equals(ws.getId()));
+        if (inAnotherWs) {
+            log.warn("Delegate {} belongs to another workspace — not assigned to {}", delegateUserId, ws.getId());
+            return;
+        }
+        roleRepo.findByCode("CEO").ifPresent(ceoRole ->
+                userRepo.findById(delegateUserId).ifPresent(user ->
+                        existingHere.ifPresentOrElse(
+                                m -> {
+                                    if (!"DEPT_HEAD".equals(m.getRole().getCode())) { m.setRole(ceoRole); memberRepo.save(m); }
+                                },
+                                () -> memberRepo.save(WorkspaceMember.builder()
+                                        .workspace(ws).user(user).role(ceoRole)
+                                        .assignedAt(Instant.now())
+                                        .assignedBy(WorkspaceContext.currentUserId()).build()))));
+    }
+
+    private List<String> parentPermissions(Workspace parent) {
+        return permissionRepo.findByWorkspaceId(parent.getId())
+                .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
+    }
+
+    // Graceful teardown of the delegate seat: every CEO member (except an
+    // optional keep) is demoted to Operator so they keep workspace access
+    // instead of being deleted and left with no workspace at all.
+    private void demoteDelegates(UUID workspaceId, UUID exceptUserId) {
+        roleRepo.findByCode("OPERATOR").ifPresent(opRole ->
+                memberRepo.findByWorkspaceId(workspaceId).stream()
+                        .filter(m -> "CEO".equals(m.getRole().getCode()))
+                        .filter(m -> exceptUserId == null || !m.getUser().getId().equals(exceptUserId))
+                        .forEach(m -> { m.setRole(opRole); memberRepo.save(m); }));
+    }
+
+    private String deriveBranchCode(String parentCode, String branchName) {
+        String slug = branchName.trim().toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("(^-+)|(-+$)", "");
+        String base = parentCode + "-" + (slug.isEmpty() ? "branch" : slug);
+        String code = base;
+        int n = 2;
+        while (workspaceRepo.existsByCode(code)) code = base + "-" + n++;
+        return code;
     }
 
     @GetMapping("/{id}")
@@ -147,15 +252,28 @@ public class WorkspaceController {
                     if (updates.containsKey("division")) ws.setDivision((String) updates.get("division"));
                     if (updates.containsKey("status")) ws.setStatus((String) updates.get("status"));
                     if (updates.containsKey("senderMask")) ws.setSenderMask((String) updates.get("senderMask"));
-                    if (updates.containsKey("dailySmsLimit")) {
+                    boolean isBranch = ws.getParentWorkspaceId() != null;
+                    // The daily limit lives on the umbrella (or a standalone
+                    // workspace) and applies to every branch beneath it — a
+                    // branch never has its own limit.
+                    if (updates.containsKey("dailySmsLimit") && !isBranch) {
                         Object raw = updates.get("dailySmsLimit");
                         if (raw instanceof Number) ws.setDailySmsLimit(((Number) raw).intValue());
                     }
                     workspaceRepo.save(ws);
-                    
+
                     if (updates.containsKey("permissions")) {
                         @SuppressWarnings("unchecked")
-                        List<String> perms = (List<String>) updates.get("permissions");
+                        List<String> rawPerms = (List<String>) updates.get("permissions");
+                        // Branches inherit permissions and never carry their own
+                        // rows, and DELEGATION can never apply to a branch-workspace
+                        // (umbrella) or a branch — strip it out regardless of what
+                        // was sent.
+                        List<String> perms = isBranch
+                                ? List.of()
+                                : rawPerms.stream()
+                                        .filter(p -> !ws.isBranchParent() || !"DELEGATION".equals(p))
+                                        .toList();
                         permissionRepo.deleteByWorkspaceId(id);
                         for (String perm : perms) {
                             permissionRepo.save(new WorkspacePermission(id, perm));
@@ -200,25 +318,39 @@ public class WorkspaceController {
                     boolean delegationKeyPresent = updates.containsKey("delegateUserId");
                     List<String> currentPermsForCheck = permissionRepo.findByWorkspaceId(id)
                             .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
-                    boolean delegationFeatureActive = currentPermsForCheck.contains("DELEGATION")
-                            || (updates.containsKey("permissions")
-                                && ((List<?>) updates.get("permissions")).contains("DELEGATION"));
+                    // A branch-workspace (umbrella) or a branch can never have a
+                    // delegate seat, no matter what the request asked for.
+                    boolean delegationFeatureActive = !isBranch && !ws.isBranchParent()
+                            && (currentPermsForCheck.contains("DELEGATION")
+                                || (updates.containsKey("permissions")
+                                    && ((List<?>) updates.get("permissions")).contains("DELEGATION")));
 
                     if (delegationKeyPresent) {
                         String delegateIdStr = (String) updates.get("delegateUserId");
 
                         if (delegateIdStr == null || delegateIdStr.isBlank() || !delegationFeatureActive) {
-                            memberRepo.findByWorkspaceId(id).stream()
-                                    .filter(m -> "CEO".equals(m.getRole().getCode()))
-                                    .forEach(memberRepo::delete);
+                            // Delegation turned off (or delegate cleared): the former
+                            // delegate keeps workspace access, gracefully demoted to
+                            // Operator rather than being removed and left orphaned.
+                            demoteDelegates(id, null);
                         } else {
                             UUID delegateId = UUID.fromString(delegateIdStr);
+                            // A delegate can only be an unassigned user or an existing
+                            // member of THIS workspace who isn't its head — never one
+                            // pulled from another workspace.
+                            boolean inAnotherWs = memberRepo.findByUserId(delegateId).stream()
+                                    .anyMatch(m -> !m.getWorkspace().getId().equals(id));
+                            boolean isThisHead = memberRepo.findByWorkspaceIdAndUserId(id, delegateId)
+                                    .map(m -> "DEPT_HEAD".equals(m.getRole().getCode())).orElse(false);
+                            if (inAnotherWs || isThisHead) {
+                                return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("title",
+                                        isThisHead ? "The workspace head cannot also be its delegate"
+                                                   : "A delegate must be unassigned or already a member of this workspace"));
+                            }
                             roleRepo.findByCode("CEO").ifPresent(ceoRole -> {
-                                memberRepo.findByWorkspaceId(id).stream()
-                                        .filter(m -> "CEO".equals(m.getRole().getCode())
-                                                && !m.getUser().getId().equals(delegateId))
-                                        .forEach(memberRepo::delete);
-
+                                // Demote whoever held the delegate seat before (except
+                                // the new pick, if they somehow already held it).
+                                demoteDelegates(id, delegateId);
                                 userRepo.findById(delegateId).ifPresent(user ->
                                     memberRepo.findByWorkspaceIdAndUserId(id, delegateId)
                                             .ifPresentOrElse(
@@ -235,13 +367,17 @@ public class WorkspaceController {
                             });
                         }
                     } else if (!delegationFeatureActive) {
-                        memberRepo.findByWorkspaceId(id).stream()
-                                .filter(m -> "CEO".equals(m.getRole().getCode()))
-                                .forEach(memberRepo::delete);
+                        demoteDelegates(id, null);
                     }
 
                     List<String> currentPerms = permissionRepo.findByWorkspaceId(id)
                             .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
+                    // Delegation ended up OFF for this workspace: finalize any campaign
+                    // stranded in PENDING_CEO — it already passed head review and there's
+                    // no delegate left to sign off, so it must not be left orphaned.
+                    if (!currentPerms.contains("DELEGATION")) {
+                        campaignService.finalizePendingDelegateApprovals(id);
+                    }
                     return ResponseEntity.ok(toDto(ws, currentPerms));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -254,6 +390,15 @@ public class WorkspaceController {
         return workspaceRepo.findById(id).map(ws -> {
             ws.setStatus("SUSPENDED");
             workspaceRepo.save(ws);
+            // An umbrella holds no members itself — suspending only the umbrella
+            // row would lock out nobody. Cascade to every branch underneath it so
+            // deactivating it actually cuts off access for its members.
+            if (ws.isBranchParent()) {
+                workspaceRepo.findByParentWorkspaceId(ws.getId()).forEach(branch -> {
+                    branch.setStatus("SUSPENDED");
+                    workspaceRepo.save(branch);
+                });
+            }
             List<String> perms = permissionRepo.findByWorkspaceId(id)
                     .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
             return ResponseEntity.ok(toDto(ws, perms));
@@ -267,6 +412,14 @@ public class WorkspaceController {
         return workspaceRepo.findById(id).map(ws -> {
             ws.setStatus("ACTIVE");
             workspaceRepo.save(ws);
+            // Mirror of the deactivate cascade: reactivating the umbrella
+            // restores access for every branch suspended alongside it.
+            if (ws.isBranchParent()) {
+                workspaceRepo.findByParentWorkspaceId(ws.getId()).forEach(branch -> {
+                    branch.setStatus("ACTIVE");
+                    workspaceRepo.save(branch);
+                });
+            }
             List<String> perms = permissionRepo.findByWorkspaceId(id)
                     .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
             return ResponseEntity.ok(toDto(ws, perms));
@@ -396,7 +549,20 @@ public class WorkspaceController {
         return toDtoEnriched(ws, permissions);
     }
 
+    // Resolves the effective feature permissions for a workspace: a branch has
+    // none of its own and inherits its umbrella's; everyone else uses theirs.
+    private List<String> effectivePermissions(Workspace ws) {
+        UUID source = ws.getParentWorkspaceId() != null ? ws.getParentWorkspaceId() : ws.getId();
+        return permissionRepo.findByWorkspaceId(source)
+                .stream().map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
+    }
+
     private WorkspaceDto toDtoEnriched(Workspace ws, List<String> permissions) {
+        // A branch always reports its umbrella's permissions regardless of what
+        // the caller computed, so inheritance can never drift.
+        if (ws.getParentWorkspaceId() != null) {
+            permissions = effectivePermissions(ws);
+        }
         long memberCount = memberRepo.findByWorkspaceId(ws.getId()).size();
 
         String adminName = memberRepo.findByWorkspaceId(ws.getId()).stream()
@@ -421,10 +587,17 @@ public class WorkspaceController {
                 .map(m -> m.getUser().getId())
                 .orElse(null);
 
+        String parentName = ws.getParentWorkspaceId() != null
+                ? workspaceRepo.findById(ws.getParentWorkspaceId()).map(Workspace::getName).orElse(null)
+                : null;
+        int branchCount = ws.isBranchParent()
+                ? workspaceRepo.findByParentWorkspaceId(ws.getId()).size() : 0;
+
         return new WorkspaceDto(ws.getId(), ws.getCode(), ws.getName(),
                 ws.getKind(), ws.getDivision(), ws.getStatus(), ws.getSenderMask(),
                 ws.getDailySmsLimit(), permissions, (int) memberCount, adminName, adminUserId,
-                delegateName, delegateUserId);
+                delegateName, delegateUserId,
+                ws.getParentWorkspaceId(), parentName, ws.isBranchParent(), branchCount);
     }
 
 
@@ -444,6 +617,14 @@ public class WorkspaceController {
         private UUID         adminUserId;
         private String       delegateName;
         private UUID         delegateUserId;
+        private UUID         parentWorkspaceId;
+        private String       parentName;
+        // Lombok's boolean-getter convention (isBranchParent()) makes Jackson
+        // derive the JSON property name "branchParent" by default — pin it
+        // explicitly so the frontend's `isBranchParent` key actually matches.
+        @JsonProperty("isBranchParent")
+        private boolean      isBranchParent;
+        private int          branchCount;
     }
 
     @Data
@@ -452,10 +633,23 @@ public class WorkspaceController {
         @NotBlank private String name;
         private String kind;
         private String division;
+        private Integer dailySmsLimit;
         private UUID adminUserId;
-        
+
         private UUID delegateUserId;
         private List<String> permissions;
+        // Branch hierarchy (see V029). parentWorkspaceId set ⇒ this is a branch
+        // under that parent. isBranchParent ⇒ this workspace is an umbrella that
+        // owns branches and holds no data of its own; when true, firstBranch*
+        // create its mandatory first branch in the same request.
+        private UUID parentWorkspaceId;
+        // Same Lombok/Jackson mismatch as WorkspaceDto — without this the
+        // incoming JSON key "isBranchParent" binds to nothing (Lombok's setter
+        // is setBranchParent(...)) and the field silently stays false.
+        @JsonProperty("isBranchParent")
+        private boolean isBranchParent;
+        private String firstBranchName;
+        private UUID firstBranchAdminUserId;
     }
 
     @Data
