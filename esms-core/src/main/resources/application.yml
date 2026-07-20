@@ -58,11 +58,13 @@ spring:
       write-dates-as-timestamps: false
     default-property-inclusion: non_null
     time-zone: UTC
-  # ldap:
-  #   urls: ldaps://your-ad-server.company.com:636
-  #   base: DC=company,DC=com
-  #   username: CN=svc-readonly,OU=ServiceAccounts,DC=company,DC=com
-  #   password: ${AD_SERVICE_PASSWORD}
+  ldap:
+    urls: ldaps://NICDCSrv2.nibins.com:636
+    base-dn: DC=nibins,DC=com
+    service-account-dn: CN=SMS Service,OU=ServiceAccounts,DC=nibins,DC=com
+    service-account-password: ${AD_SERVICE_PASSWORD}
+    user-search-base: ""
+    user-search-filter: "(sAMAccountName={0})"
 
 server:
   port: ${APP_PORT_CORE:8080}
