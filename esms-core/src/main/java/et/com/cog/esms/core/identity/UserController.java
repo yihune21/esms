@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import et.com.cog.esms.core.audit.AuditService;
 import et.com.cog.esms.core.security.WorkspaceContext;
+import et.com.cog.esms.core.util.PhoneNumbers;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 
@@ -28,6 +29,7 @@ public class UserController {
     private final PasswordEncoder passwordEncoder;
     private final WorkspaceMemberRepository memberRepo;
     private final AuditService auditService;
+    private final et.com.cog.esms.core.security.MobileCipher mobileCipher;
 
     @GetMapping
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_MEMBER_ADD')")
@@ -57,10 +59,24 @@ public class UserController {
                     .body(Map.of("title", "Username already exists"));
         }
 
+        // Login requires an OTP, so an account without a mobile can never sign
+        // in. The field stays optional to avoid breaking existing callers, but
+        // a bad value is rejected outright rather than stored unusable.
+        String mobile = null;
+        if (req.getMobile() != null && !req.getMobile().isBlank()) {
+            mobile = PhoneNumbers.normalize(req.getMobile());
+            if (!PhoneNumbers.isValidE164(mobile)) {
+                return ResponseEntity.badRequest().body(Map.of("title",
+                        "mobile must be a valid Ethiopian number, e.g. 0911234567 or +251911234567"));
+            }
+        }
+
         AppUser user = AppUser.builder()
                 .username(req.getUsername())
                 .displayName(req.getDisplayName())
                 .email(req.getEmail())
+                .mobileEnc(mobileCipher.encrypt(mobile))
+                .mobileHash(mobileCipher.hash(mobile))
                 .passwordHash(passwordEncoder.encode(req.getPassword()))
                 .status("ACTIVE")
                 .failedLogins((short) 0)
@@ -82,6 +98,22 @@ public class UserController {
                 .map(u -> {
                     if (updates.containsKey("displayName")) u.setDisplayName((String) updates.get("displayName"));
                     if (updates.containsKey("email")) u.setEmail((String) updates.get("email"));
+
+                    if (updates.containsKey("mobile")) {
+                        String raw = (String) updates.get("mobile");
+                        if (raw == null || raw.isBlank()) {
+                            u.setMobileEnc(null);
+                            u.setMobileHash(null);
+                        } else {
+                            String mobile = PhoneNumbers.normalize(raw);
+                            if (!PhoneNumbers.isValidE164(mobile)) {
+                                return ResponseEntity.badRequest().body(Map.of("title",
+                                        "mobile must be a valid Ethiopian number, e.g. 0911234567 or +251911234567"));
+                            }
+                            u.setMobileEnc(mobileCipher.encrypt(mobile));
+                            u.setMobileHash(mobileCipher.hash(mobile));
+                        }
+                    }
 
                     boolean passwordChanged = updates.containsKey("password");
                     if (passwordChanged) {
@@ -179,7 +211,7 @@ public class UserController {
         return new UserDto(
                 u.getId(), u.getUsername(), u.getDisplayName(), u.getEmail(),
                 u.getStatus(), u.getLastLoginAt(), u.getCreatedAt(), u.getUpdatedAt(),
-                primaryRole, primaryWorkspace, division, memberships
+                primaryRole, primaryWorkspace, division, u.getMobileEnc() != null, memberships
         );
     }
 
@@ -197,6 +229,8 @@ public class UserController {
         private String  primaryRole;
         private String  primaryWorkspace;
         private String  division;
+        // Never the number itself - just whether the account can receive an OTP.
+        private boolean hasMobile;
         private List<MembershipDto> memberships;
     }
 
@@ -215,5 +249,7 @@ public class UserController {
         @NotBlank private String displayName;
         private String email;
         @NotBlank private String password;
+        // Optional, but an account without one can never complete OTP login.
+        private String mobile;
     }
 }

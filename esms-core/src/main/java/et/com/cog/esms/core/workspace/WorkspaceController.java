@@ -160,6 +160,68 @@ public class WorkspaceController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(savedWs, savedPerms));
     }
 
+    /**
+     * Decides whether a PATCH's delegate change must be rejected, WITHOUT
+     * touching anything. Returns the response to send, or null to proceed.
+     *
+     * Evaluated against the end state the request is asking for rather than
+     * the current one, so naming the same user as both head and delegate in a
+     * single call is caught — previously adminUserId was applied first, and
+     * the head check then compared against the user who had just been demoted.
+     */
+    private ResponseEntity<?> validateDelegateChange(Workspace ws, UUID id, Map<String, Object> updates) {
+        if (!updates.containsKey("delegateUserId")) return null;
+
+        String delegateIdStr = (String) updates.get("delegateUserId");
+        if (delegateIdStr == null || delegateIdStr.isBlank()) return null;
+
+        // A delegate is only actually assigned when the workspace ends up with
+        // the DELEGATION feature; otherwise the request is a no-op that just
+        // demotes the old delegate, so there is nothing to reject.
+        boolean isBranch = ws.getParentWorkspaceId() != null;
+        @SuppressWarnings("unchecked")
+        List<String> effectivePerms = updates.containsKey("permissions")
+                ? (List<String>) updates.get("permissions")
+                : permissionRepo.findByWorkspaceId(id).stream()
+                        .map(WorkspacePermission::getPermissionCode).collect(Collectors.toList());
+        boolean delegationWillBeActive =
+                !isBranch && !ws.isBranchParent() && effectivePerms.contains("DELEGATION");
+        if (!delegationWillBeActive) return null;
+
+        UUID delegateId;
+        try {
+            delegateId = UUID.fromString(delegateIdStr);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("title", "delegateUserId must be a valid UUID"));
+        }
+
+        // A delegate can only be an unassigned user or an existing member of
+        // THIS workspace who isn't its head — never one pulled from another.
+        boolean inAnotherWs = memberRepo.findByUserId(delegateId).stream()
+                .anyMatch(m -> !m.getWorkspace().getId().equals(id));
+
+        UUID targetAdminId = null;
+        if (updates.containsKey("adminUserId") && updates.get("adminUserId") != null) {
+            try {
+                targetAdminId = UUID.fromString((String) updates.get("adminUserId"));
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().body(Map.of("title", "adminUserId must be a valid UUID"));
+            }
+        } else {
+            targetAdminId = memberRepo.findByWorkspaceId(id).stream()
+                    .filter(m -> "DEPT_HEAD".equals(m.getRole().getCode()))
+                    .findFirst().map(m -> m.getUser().getId()).orElse(null);
+        }
+        boolean isThisHead = delegateId.equals(targetAdminId);
+
+        if (inAnotherWs || isThisHead) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("title",
+                    isThisHead ? "The workspace head cannot also be its delegate"
+                               : "A delegate must be unassigned or already a member of this workspace"));
+        }
+        return null;
+    }
+
     // Enforces single membership for a workspace admin: null == ok, else the
     // reason to reject. A user already in any workspace can't be made a new
     // workspace's admin.
@@ -248,6 +310,19 @@ public class WorkspaceController {
                                     @RequestBody Map<String, Object> updates) {
         return workspaceRepo.findById(id)
                 .map(ws -> {
+                    // ── Reject before mutating ──────────────────────────────
+                    // This method is @Transactional and `ws` is a managed
+                    // entity, so every field set below is flushed on commit.
+                    // The delegate checks used to sit at the BOTTOM of this
+                    // method, after the rename, the permission rewrite and the
+                    // admin reassignment had all been applied — so a request
+                    // rejected with 409 still persisted every one of them.
+                    // Anything that can reject the request is evaluated here,
+                    // against the state the request is asking for, while there
+                    // is still nothing to undo.
+                    ResponseEntity<?> rejection = validateDelegateChange(ws, id, updates);
+                    if (rejection != null) return rejection;
+
                     if (updates.containsKey("name")) ws.setName((String) updates.get("name"));
                     if (updates.containsKey("division")) ws.setDivision((String) updates.get("division"));
                     if (updates.containsKey("status")) ws.setStatus((String) updates.get("status"));
@@ -334,19 +409,10 @@ public class WorkspaceController {
                             // Operator rather than being removed and left orphaned.
                             demoteDelegates(id, null);
                         } else {
+                            // Already validated up front by
+                            // validateDelegateChange(), before anything was
+                            // mutated — see the note at the top of this method.
                             UUID delegateId = UUID.fromString(delegateIdStr);
-                            // A delegate can only be an unassigned user or an existing
-                            // member of THIS workspace who isn't its head — never one
-                            // pulled from another workspace.
-                            boolean inAnotherWs = memberRepo.findByUserId(delegateId).stream()
-                                    .anyMatch(m -> !m.getWorkspace().getId().equals(id));
-                            boolean isThisHead = memberRepo.findByWorkspaceIdAndUserId(id, delegateId)
-                                    .map(m -> "DEPT_HEAD".equals(m.getRole().getCode())).orElse(false);
-                            if (inAnotherWs || isThisHead) {
-                                return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("title",
-                                        isThisHead ? "The workspace head cannot also be its delegate"
-                                                   : "A delegate must be unassigned or already a member of this workspace"));
-                            }
                             roleRepo.findByCode("CEO").ifPresent(ceoRole -> {
                                 // Demote whoever held the delegate seat before (except
                                 // the new pick, if they somehow already held it).

@@ -5,6 +5,9 @@ import org.springframework.amqp.core.*;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.ArrayList;
+import java.util.List;
+
 
 @Configuration
 public class SenderRabbitConfig {
@@ -35,6 +38,25 @@ public class SenderRabbitConfig {
     @Bean
     public Queue smsDlqQueue() {
         return QueueBuilder.durable(QueueConstants.QUEUE_DLQ).build();
+    }
+
+    /**
+     * One holding queue per backoff step. A queue here has no consumer — a
+     * message sits for the queue's TTL and is then dead-lettered straight back
+     * onto sms.send.q for another attempt. This is what makes
+     * app.sender.retry.backoff-steps actually do something.
+     */
+    @Bean
+    public Declarables retryQueues(RetrySchedule schedule) {
+        List<Declarable> declarables = new ArrayList<>();
+        for (int i = 0; i < schedule.getQueueNames().size(); i++) {
+            declarables.add(QueueBuilder.durable(schedule.getQueueNames().get(i))
+                    .withArgument("x-message-ttl", schedule.getBackoffMillis().get(i))
+                    .withArgument("x-dead-letter-exchange", QueueConstants.EXCHANGE_SMS)
+                    .withArgument("x-dead-letter-routing-key", "sms.send")
+                    .build());
+        }
+        return new Declarables(declarables);
     }
 
     @Bean

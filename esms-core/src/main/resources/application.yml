@@ -97,7 +97,18 @@ app:
       refresh-token-ttl: PT8H
       issuer: esms-core
     idle-threshold: PT5M
+    mobile:
+      # Base64 AES key protecting app_user.mobile_enc. Rotating it makes every
+      # stored number unreadable, so OTP login stops working until they are
+      # re-entered. Dev default only.
+      encryption-key: ${MOBILE_ENCRYPTION_KEY:ZGV2LW9ubHktMzItYnl0ZS1tb2JpbGUta2V5ISEhISE=}
     otp:
+      # The seeded administrator may sign in without an OTP for as long as it
+      # has no mobile number, so a new deployment can be entered once to set
+      # one. Blank disables the bypass.
+      bootstrap-username: ${OTP_BOOTSTRAP_USERNAME:superadmin}
+      sender-mask: ${OTP_SENDER_MASK:NIB}
+      sms-template: "Your NIC eSMS verification code is {otp}. It expires in 5 minutes. Do not share it."
       ttl: PT5M
       length: 6
       max-attempts: 3

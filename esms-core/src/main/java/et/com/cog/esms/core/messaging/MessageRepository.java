@@ -28,6 +28,10 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
         long   getPending();
     }
 
+    // Fallback for delivery receipts whose carrier id predates
+    // message_carrier_ref (V030). New sends resolve via that table instead.
+    java.util.Optional<Message> findFirstByCarrierMsgId(String carrierMsgId);
+
     List<Message> findByCampaignId(UUID campaignId);
 
     List<Message> findByReminderId(UUID reminderId);

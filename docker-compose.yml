@@ -70,6 +70,8 @@ services:
       APP_PORT_CORE: 8080
       JWT_SECRET: dev-secret-key-change-in-production-must-be-at-least-256-bits-long!!
       AD_ENABLED: "false"
+      OTP_BOOTSTRAP_USERNAME: ${OTP_BOOTSTRAP_USERNAME:-superadmin}
+      MOBILE_ENCRYPTION_KEY: ${MOBILE_ENCRYPTION_KEY:-ZGV2LW9ubHktMzItYnl0ZS1tb2JpbGUta2V5ISEhISE=}
     depends_on:
       postgres:
         condition: service_healthy

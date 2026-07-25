@@ -32,9 +32,23 @@ public class ContactController {
     public ResponseEntity<List<ContactDto>> list(
             @RequestParam(required = false) String status) {
         UUID wsId = WorkspaceContext.currentWorkspaceId();
-        List<Contact> contacts = status != null
-                ? contactRepo.findByWorkspaceIdAndStatusOrderByCreatedAtDesc(wsId, status)
-                : contactRepo.findByWorkspaceIdAndStatusOrderByCreatedAtDesc(wsId, "ACTIVE");
+        boolean isSuperAdmin = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"));
+
+        // A super admin holds no workspace membership, so wsId is null and the
+        // workspace-scoped query matched nothing — contacts were the only
+        // resource that showed them an empty list, unlike campaigns, groups,
+        // templates and reminders which all handle this.
+        List<Contact> contacts;
+        if (isSuperAdmin && wsId == null) {
+            contacts = status != null
+                    ? contactRepo.findByStatusOrderByCreatedAtDesc(status)
+                    : contactRepo.findAllByOrderByCreatedAtDesc();
+        } else {
+            contacts = contactRepo.findByWorkspaceIdAndStatusOrderByCreatedAtDesc(
+                    wsId, status != null ? status : "ACTIVE");
+        }
         List<ContactDto> result = contacts.stream().map(this::toDto).collect(Collectors.toList());
         return ResponseEntity.ok(result);
     }

@@ -20,5 +20,5 @@ RUN chown -R esms:esms /app
 USER esms
 EXPOSE 8081
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD wget -qO- http://localhost:8081/health || exit 1
+    CMD wget -qO- http://localhost:8081/actuator/health || exit 1
 ENTRYPOINT ["java", "-jar", "app.jar"]

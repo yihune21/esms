@@ -13,6 +13,11 @@ public interface ContactRepository extends JpaRepository<Contact, UUID> {
 
     List<Contact> findByWorkspaceIdAndStatusOrderByCreatedAtDesc(UUID workspaceId, String status);
 
+    // Platform-wide (super admin, no workspace context) — every workspace's contacts.
+    List<Contact> findAllByOrderByCreatedAtDesc();
+
+    List<Contact> findByStatusOrderByCreatedAtDesc(String status);
+
     boolean existsByWorkspaceIdAndPhoneE164(UUID workspaceId, String phoneE164);
 
     java.util.Optional<Contact> findByWorkspaceIdAndPhoneE164(UUID workspaceId, String phoneE164);

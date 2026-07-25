@@ -1,5 +1,6 @@
 package et.com.cog.esms.sender.config;
 
+import jakarta.annotation.PostConstruct;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -7,6 +8,34 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Data
 @ConfigurationProperties(prefix = "app.gateway.nib-smsc")
 public class SmppProperties {
+
+    /**
+     * Fails startup when the SMSC credentials never arrived.
+     *
+     * This is not paranoia. Spring resolves placeholders during
+     * @ConfigurationProperties binding with ignoreUnresolvablePlaceholders
+     * enabled, so an unset ${NIB_SMSC_PASSWORD} does NOT raise an error — the
+     * field is populated with the literal string "${NIB_SMSC_PASSWORD}" and
+     * the sender happily tries to bind to the SMSC with that as its password,
+     * failing later with an opaque SMPP error. Checking here turns a silent
+     * misconfiguration into an immediate, readable one.
+     */
+    @PostConstruct
+    void validateCredentials() {
+        requireResolved("NIB_SMSC_HOST", "host", host);
+        requireResolved("NIB_SMSC_SYSTEM_ID", "system-id", systemId);
+        requireResolved("NIB_SMSC_PASSWORD", "password", password);
+    }
+
+    private static void requireResolved(String envVar, String key, String value) {
+        boolean unresolved = value != null && value.startsWith("${") && value.endsWith("}");
+        if (value == null || value.isBlank() || unresolved) {
+            throw new IllegalStateException(
+                    "app.gateway.nib-smsc." + key + " is not configured — set the "
+                            + envVar + " environment variable (see .env). The sender cannot "
+                            + "bind to the NIB SMSC without it.");
+        }
+    }
 
     private String host = "10.204.181.70";
 

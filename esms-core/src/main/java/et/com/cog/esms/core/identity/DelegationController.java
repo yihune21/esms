@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -39,6 +40,7 @@ public class DelegationController {
 
     @PostMapping
     @PreAuthorize("hasAuthority('ADMIN_DELEGATE')")
+    @Transactional
     public ResponseEntity<?> create(@Valid @RequestBody CreateDelegationRequest req) {
         UUID wsId = (req.getWorkspaceId() != null)
                 ? req.getWorkspaceId()
@@ -61,14 +63,34 @@ public class DelegationController {
             return ResponseEntity.badRequest().body(Map.of("title", "Delegate user not found"));
         }
 
-        var userWs = memberRepo.findByUserId(req.getToUserId());
-        var hasWs =  userWs.size() > 0? true : false;
-        var userWsId = hasWs ? userWs.get(0).getId() : null;
-        
-       if(!wsId.equals(userWsId) ){
-           auditService.log(wsId, "ADMIN", "WARN", "DELEGATION_USER_HAS_WORKSPACE", "Delegation", null);
-           return ResponseEntity.status(HttpStatus.CONFLICT)
-                   .body(Map.of("title", "User already has another workspace"));
+        // Reject only a delegate who belongs to a DIFFERENT workspace. Someone
+        // with no workspace at all is fine — they are granted membership here
+        // (further down), which is the whole point of delegating to them.
+        //
+        // This previously compared wsId against `userWs.get(0).getId()`, the
+        // WorkspaceMember row's own primary key rather than its workspace id.
+        // That never matched anything, so EVERY delegation attempt returned
+        // 409 — including the no-membership case, where the id was null. The
+        // delegation feature has been unreachable, which in turn made the
+        // permission-injection block in JwtAuthenticationFilter dead code.
+        boolean inAnotherWorkspace = memberRepo.findByUserId(req.getToUserId()).stream()
+                .anyMatch(m -> !m.getWorkspace().getId().equals(wsId));
+        if (inAnotherWorkspace) {
+            auditService.log(wsId, "ADMIN", "WARN", "DELEGATION_USER_HAS_WORKSPACE", "Delegation", null);
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("title", "User already belongs to another workspace"));
+        }
+
+        // Resolved before anything is written: a delegation hands over the
+        // delegator's own authority in this workspace, so without a membership
+        // there is nothing to hand over. This lookup used to sit after the
+        // delegation row was already saved — and the method was not
+        // transactional — so failing it left an orphaned delegation behind.
+        var delegatorMembership = memberRepo.findByWorkspaceIdAndUserId(wsId, fromUserId).orElse(null);
+        if (delegatorMembership == null) {
+            auditService.log(wsId, "ADMIN", "WARN", "DELEGATION_DELEGATOR_NOT_MEMBER", "Delegation", null);
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("title", "You are not a member of this workspace, so you have no authority to delegate"));
         }
 
         Instant startsAt = req.getStartsAt() != null ? req.getStartsAt() : Instant.now();
@@ -102,8 +124,6 @@ public class DelegationController {
         Delegation saved = delegationRepo.save(delegation);
 
         boolean grantedMembership = false;
-        var delegatorMembership = memberRepo.findByWorkspaceIdAndUserId(wsId, fromUserId)
-                .orElseThrow(() -> new IllegalStateException("Delegator is not a member of this workspace"));
         var roleCode = delegatorMembership.getRole().getCode();
         if (!memberRepo.existsByWorkspaceIdAndUserId(wsId, req.getToUserId())) {
             roleRepo.findByCode(roleCode).ifPresent(role ->

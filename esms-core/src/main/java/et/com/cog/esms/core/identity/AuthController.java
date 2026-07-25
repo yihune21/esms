@@ -2,6 +2,7 @@ package et.com.cog.esms.core.identity;
 
 import et.com.cog.esms.core.audit.AuditService;
 import et.com.cog.esms.core.security.JwtTokenProvider;
+import et.com.cog.esms.core.util.PhoneNumbers;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,6 +17,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.*;
 
 
@@ -33,6 +35,17 @@ public class AuthController {
     private final UserRepository userRepository;
     private final WorkspaceMemberRepository memberRepository;
     private final AuditService auditService;
+    private final OtpSmsService otpSmsService;
+    private final et.com.cog.esms.core.security.MobileCipher mobileCipher;
+
+    /**
+     * The single account whose OTP may be written to the server log instead of
+     * sent, and only while it still has no mobile number, so a freshly seeded
+     * deployment can be entered once to configure one. The OTP step itself is
+     * never skipped. Set to an empty value to disable this entirely.
+     */
+    @org.springframework.beans.factory.annotation.Value("${app.security.otp.bootstrap-username:superadmin}")
+    private String bootstrapAdminUsername;
 
 
 
@@ -74,10 +87,57 @@ public class AuthController {
             return problem(401, "Invalid credentials");
         }
 
-        String otp = otpService.generateAndStore(user.getId().toString());
-        log.info("OTP generated for user {} (dev mode, OTP={})", user.getUsername(), otp);
+        // The OTP is never logged for a normal account. It used to be written
+        // to the application log for EVERY user in place of being sent, which
+        // made every account reachable by anyone who could read logs. The one
+        // remaining exception is the first-run case below.
+        String mobile = mobileCipher.decrypt(user.getMobileEnc());
+        boolean canSms = PhoneNumbers.isValidE164(mobile);
 
-        // orchestrator.sendOtpSms(user.getMobileDecrypted(), otp);
+        // First-run only. The seeded administrator has no number, and a number
+        // can only be set from inside the application, so a deployment would
+        // otherwise be locked out of its own admin account. The OTP step is
+        // still enforced in full - the code is simply written to the server log
+        // instead of being sent, so whoever is standing up the system can read
+        // it there. Signing in therefore still requires server access, which a
+        // password-only bypass would not.
+        //
+        // Deliberately narrow: only the configured bootstrap username, only
+        // while that account has no number, and audited CRITICAL each time. The
+        // moment a number is saved this stops applying and the code is never
+        // logged again.
+        boolean firstRunLoggedOtp = !canSms
+                && user.getUsername().equalsIgnoreCase(bootstrapAdminUsername);
+
+        if (!canSms && !firstRunLoggedOtp) {
+            auditService.log(null, "AUTH", "CRITICAL", "LOGIN_NO_MOBILE_ON_FILE", "User", user.getId());
+            log.error("User {} has no usable mobile number on file - cannot deliver an OTP", user.getUsername());
+            return problem(409, "No mobile number is registered for this account. Contact your administrator.");
+        }
+
+        String otp = otpService.generateAndStore(user.getId().toString());
+
+        if (firstRunLoggedOtp) {
+            // Format kept greppable so the documented
+            // "docker compose logs esms-core | grep -i OTP" still works.
+            log.warn("FIRST-RUN LOGIN for {} - no mobile number on file, so the code was not sent. "
+                    + "OTP={} — enter it to finish signing in, then set a mobile number from the "
+                    + "user screen. Once set, codes go by SMS and are never logged again.",
+                    user.getUsername(), otp);
+            auditService.log(null, "AUTH", "CRITICAL", "LOGIN_OTP_WRITTEN_TO_LOG_NO_MOBILE",
+                    "User", user.getId());
+        } else {
+            try {
+                otpSmsService.send(user.getId(), mobile, otp);
+            } catch (Exception e) {
+                // Do not leave a live OTP sitting in Redis for a code that was
+                // never delivered.
+                otpService.invalidate(user.getId().toString());
+                auditService.log(null, "AUTH", "CRITICAL", "LOGIN_OTP_SEND_FAILED", "User", user.getId());
+                log.error("Failed to queue the OTP SMS for user {}: {}", user.getUsername(), e.getMessage(), e);
+                return problem(503, "Could not send the verification code. Please try again.");
+            }
+        }
 
         String preAuthToken = tokenProvider.createPreAuthToken(user.getId(), user.getUsername());
         lockoutService.clearFailures(req.getUsername());
@@ -86,7 +146,15 @@ public class AuthController {
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("preAuthToken", preAuthToken);
-        body.put("otpSentTo", maskPhone(user.getMobileHash()));
+        // Masks the real number. This used to mask mobile_hash, so it returned
+        // the last four characters of a SHA-256 digest.
+        body.put("otpSentTo", firstRunLoggedOtp
+                ? "the esms-core server log (first-run setup)"
+                : PhoneNumbers.mask(mobile));
+        body.put("otpRequired", true);
+        // Lets the UI prompt for a number once this session starts; without one
+        // the next login would fall back to the log again.
+        body.put("mobileRequired", firstRunLoggedOtp);
         body.put("expiresIn", 180);
         
         return ResponseEntity.ok(body);
@@ -106,64 +174,8 @@ public class AuthController {
 
         var result = otpService.verify(userId.toString(), req.getOtp());
         return switch (result) {
-            case VALID -> {
-                var memberships = memberRepository.findByUserId(userId);
+            case VALID -> issueSession(userId, username, response);
 
-                // A user has exactly one workspace membership (SUPER_ADMIN has
-                // none). If that workspace was deactivated, reject before ever
-                // issuing an access token — otherwise the user would sign in
-                // successfully only to be blocked on the very next request.
-                boolean isSuperAdmin = memberships.stream()
-                        .anyMatch(m -> "SUPER_ADMIN".equals(m.getRole().getCode()));
-                if (!isSuperAdmin && !memberships.isEmpty()
-                        && !"ACTIVE".equals(memberships.get(0).getWorkspace().getStatus())) {
-                    auditService.log(memberships.get(0).getWorkspace().getId(), "AUTH", "WARN",
-                            "LOGIN_WORKSPACE_DEACTIVATED", "User", userId);
-                    yield ResponseEntity.status(HttpStatus.FORBIDDEN)
-                            .header("Content-Type", "application/problem+json")
-                            .body(Map.of("type", "/errors/auth", "status", 403, "code", "WORKSPACE_DEACTIVATED",
-                                    "title", "Your workspace has been deactivated. Contact your administrator."));
-                }
-
-                List<Map<String, Object>> workspaces = memberships.stream()
-                        .map(m -> {
-                            Map<String, Object> ws = new LinkedHashMap<>();
-                            ws.put("id", m.getWorkspace().getId());
-                            ws.put("code", m.getWorkspace().getCode());
-                            ws.put("role", m.getRole().getCode());
-                            return ws;
-                        }).toList();
-
-                UUID defaultWsId = memberships.isEmpty() ? null : memberships.get(0).getWorkspace().getId();
-                String defaultRole = memberships.isEmpty() ? null : memberships.get(0).getRole().getCode();
-                List<String> perms = memberships.isEmpty() ? List.of()
-                        : memberships.get(0).getRole().getPermissionCodes();
-
-                String accessToken = tokenProvider.createAccessToken(userId, username,
-                        defaultWsId, defaultRole, perms);
-                String refreshToken = tokenProvider.createRefreshToken(userId);
-                Claims refreshClaims = tokenProvider.parseToken(refreshToken);
-                String refreshJti = tokenProvider.getJti(refreshClaims);
-
-                sessionService.createSession(userId, refreshJti);
-
-                Cookie cookie = new Cookie("refreshToken", refreshToken);
-                cookie.setHttpOnly(true);
-                cookie.setSecure(true);
-                cookie.setPath("/auth");
-                cookie.setMaxAge((int) tokenProvider.getRefreshTokenTtl().toSeconds());
-                response.addCookie(cookie);
-
-                Map<String, Object> body = new LinkedHashMap<>();
-                body.put("accessToken", accessToken);
-                body.put("expiresIn", tokenProvider.getAccessTokenTtl().toSeconds());
-                body.put("refreshCookieSet", true);
-                body.put("workspaces", workspaces);
-
-                auditService.log(defaultWsId, "AUTH", "INFO", "LOGIN_SUCCESS", "User", userId);
-
-                yield ResponseEntity.ok(body);
-            }
             case INVALID -> {
                 auditService.log(null, "AUTH", "WARN", "OTP_INVALID", "User", userId);
                 yield problem(401, "Invalid OTP");
@@ -280,9 +292,35 @@ public class AuthController {
             return problem(429, "Please wait before requesting another OTP");
         }
 
+        var user = userRepository.findById(userId).orElse(null);
+        String mobile = user != null ? mobileCipher.decrypt(user.getMobileEnc()) : null;
+        boolean canSms = PhoneNumbers.isValidE164(mobile);
+        // Same first-run rule as /auth/login, so "Resend OTP" keeps working
+        // during setup instead of dead-ending on a 409.
+        boolean firstRunLoggedOtp = !canSms && user != null
+                && user.getUsername().equalsIgnoreCase(bootstrapAdminUsername);
+
+        if (!canSms && !firstRunLoggedOtp) {
+            auditService.log(null, "AUTH", "CRITICAL", "RESEND_OTP_NO_MOBILE", "User", userId);
+            return problem(409, "No mobile number is registered for this account. Contact your administrator.");
+        }
+
         String otp = otpService.generateAndStore(userId.toString());
+        if (firstRunLoggedOtp) {
+            log.warn("FIRST-RUN LOGIN for {} - resent code not sent (no mobile number on file). OTP={}",
+                    user.getUsername(), otp);
+            auditService.log(null, "AUTH", "CRITICAL", "RESEND_OTP_WRITTEN_TO_LOG_NO_MOBILE", "User", userId);
+        } else {
+            try {
+                otpSmsService.send(userId, mobile, otp);
+            } catch (Exception e) {
+                otpService.invalidate(userId.toString());
+                auditService.log(null, "AUTH", "CRITICAL", "RESEND_OTP_SEND_FAILED", "User", userId);
+                log.error("Failed to queue the resent OTP SMS for user {}: {}", userId, e.getMessage(), e);
+                return problem(503, "Could not send the verification code. Please try again.");
+            }
+        }
         otpService.markResendCooldown(userId.toString());
-        log.info("OTP resent for user {} (dev mode, OTP={})", userId, otp);
 
         auditService.log(null, "AUTH", "INFO", "OTP_RESENT", "User", userId);
 
@@ -382,6 +420,75 @@ public class AuthController {
         return ResponseEntity.ok(body);
     }
 
+
+    /**
+     * Issues the access token, refresh cookie and session for a user who has
+     * cleared the OTP step.
+     *
+     */
+    private ResponseEntity<?> issueSession(UUID userId, String username,
+                                           HttpServletResponse response) {
+        var memberships = memberRepository.findByUserId(userId);
+
+        // A user has exactly one workspace membership (SUPER_ADMIN has none).
+        // If that workspace was deactivated, reject before ever issuing an
+        // access token - otherwise the user would sign in successfully only to
+        // be blocked on the very next request.
+        boolean isSuperAdmin = memberships.stream()
+                .anyMatch(m -> "SUPER_ADMIN".equals(m.getRole().getCode()));
+        if (!isSuperAdmin && !memberships.isEmpty()
+                && !"ACTIVE".equals(memberships.get(0).getWorkspace().getStatus())) {
+            auditService.log(memberships.get(0).getWorkspace().getId(), "AUTH", "WARN",
+                    "LOGIN_WORKSPACE_DEACTIVATED", "User", userId);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .header("Content-Type", "application/problem+json")
+                    .body(Map.of("type", "/errors/auth", "status", 403, "code", "WORKSPACE_DEACTIVATED",
+                            "title", "Your workspace has been deactivated. Contact your administrator."));
+        }
+
+        List<Map<String, Object>> workspaces = memberships.stream()
+                .map(m -> {
+                    Map<String, Object> ws = new LinkedHashMap<>();
+                    ws.put("id", m.getWorkspace().getId());
+                    ws.put("code", m.getWorkspace().getCode());
+                    ws.put("role", m.getRole().getCode());
+                    return ws;
+                }).toList();
+
+        UUID defaultWsId = memberships.isEmpty() ? null : memberships.get(0).getWorkspace().getId();
+        String defaultRole = memberships.isEmpty() ? null : memberships.get(0).getRole().getCode();
+        List<String> perms = memberships.isEmpty() ? List.of()
+                : memberships.get(0).getRole().getPermissionCodes();
+
+        String accessToken = tokenProvider.createAccessToken(userId, username,
+                defaultWsId, defaultRole, perms);
+        String refreshToken = tokenProvider.createRefreshToken(userId);
+        Claims refreshClaims = tokenProvider.parseToken(refreshToken);
+        String refreshJti = tokenProvider.getJti(refreshClaims);
+
+        sessionService.createSession(userId, refreshJti);
+
+        Cookie cookie = new Cookie("refreshToken", refreshToken);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(true);
+        cookie.setPath("/auth");
+        cookie.setMaxAge((int) tokenProvider.getRefreshTokenTtl().toSeconds());
+        response.addCookie(cookie);
+
+        userRepository.findById(userId).ifPresent(u -> {
+            u.setLastLoginAt(Instant.now());
+            userRepository.save(u);
+        });
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("accessToken", accessToken);
+        body.put("expiresIn", tokenProvider.getAccessTokenTtl().toSeconds());
+        body.put("refreshCookieSet", true);
+        body.put("workspaces", workspaces);
+        auditService.log(defaultWsId, "AUTH", "INFO", "LOGIN_SUCCESS", "User", userId);
+
+        return ResponseEntity.ok(body);
+    }
 
     private String extractRefreshCookie(HttpServletRequest request) {
         if (request.getCookies() != null) {

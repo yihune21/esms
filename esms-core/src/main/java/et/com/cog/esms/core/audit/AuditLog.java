@@ -51,7 +51,10 @@ public class AuditLog {
     @Column(name = "row_hash")
     private String rowHash;
 
-    @CreationTimestamp
+    // Deliberately NOT @CreationTimestamp. The timestamp is part of the hash
+    // chain, so it has to be known before the row is hashed; a value assigned
+    // by Hibernate at insert time would sit outside the hash and could then be
+    // rewritten without breaking it. AuditService sets this explicitly.
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
 }

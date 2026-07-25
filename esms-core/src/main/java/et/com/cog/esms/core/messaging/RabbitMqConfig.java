@@ -39,13 +39,12 @@ public class RabbitMqConfig {
         return QueueBuilder.durable(QueueConstants.QUEUE_DLQ).build();
     }
 
-    @Bean
-    public Queue smsRetryQueue() {
-        return QueueBuilder.durable(QueueConstants.QUEUE_RETRY)
-                .withArgument("x-dead-letter-exchange", QueueConstants.EXCHANGE_SMS)
-                .withArgument("x-dead-letter-routing-key", "sms.send")
-                .build();
-    }
+    // Retry queues are owned by esms-sender (see SenderRabbitConfig.retryQueues),
+    // which declares one per backoff step with the x-message-ttl that actually
+    // produces the delay. The single sms.retry.q formerly declared here had a
+    // dead-letter route back to sms.send but NO TTL, so anything published to
+    // it would have looped instantly — nothing ever published to it, and the
+    // retry path lived only in config until it was implemented sender-side.
 
 
     @Bean

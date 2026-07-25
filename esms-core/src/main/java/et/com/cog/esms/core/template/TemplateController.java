@@ -112,38 +112,54 @@ public class TemplateController {
     @Transactional
     public ResponseEntity<?> update(@PathVariable UUID id,
                                     @RequestBody Map<String, Object> updates) {
-        return templateRepo.findById(id)
-                .map(t -> {
-                    if (updates.containsKey("name"))             t.setName((String) updates.get("name"));
-                    if (updates.containsKey("description"))      t.setDescription((String) updates.get("description"));
-                    if (updates.containsKey("body"))             t.setBody((String) updates.get("body"));
-                    if (updates.containsKey("encoding"))         t.setEncoding((String) updates.get("encoding"));
-                    if (updates.containsKey("sender"))           t.setSender((String) updates.get("sender"));
-                    if (updates.containsKey("recipientGroupId")) {
-                        Object raw = updates.get("recipientGroupId");
-                        t.setRecipientGroupId(raw != null ? UUID.fromString((String) raw) : null);
-                    }
-                    if (t.getRecipientGroupId() == null) {
-                        long inlineCount = recipientRepo.countByTemplateId(t.getId());
-                        if (inlineCount == 0) {
-                            return ResponseEntity.badRequest().body(Map.of("title", "A template must have at least one recipient (either recipientGroupId or an inline recipient list)"));
-                        }
-                    }
-                    if (updates.containsKey("variables")) {
-                        @SuppressWarnings("unchecked")
-                        List<String> vars = (List<String>) updates.get("variables");
-                        t.setVariables(vars);
-                    }
-                    t.setStatus("DRAFT");
-                    
-                    Template saved  = templateRepo.save(t);
-                    
-                    auditService.log(WorkspaceContext.currentWorkspaceId(), "TEMPLATE", "INFO",
-                            "TEMPLATE_UPDATED", "TEMPLATE", saved.getId());
-                    
-                    return ResponseEntity.ok(toDto(templateRepo.save(t)));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        Template t = templateRepo.findById(id).orElse(null);
+        if (t == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        // Everything is validated BEFORE the entity is touched.
+        //
+        // This method is @Transactional, so `t` is a managed entity: any field
+        // set on it is flushed to the database when the transaction commits.
+        // Returning ResponseEntity.badRequest() is a normal return, not an
+        // exception, so it rolls nothing back — validating after mutating meant
+        // a rejected edit was still saved, and the caller got a 400 telling
+        // them it had not been.
+        UUID targetGroupId = t.getRecipientGroupId();
+        if (updates.containsKey("recipientGroupId")) {
+            Object raw = updates.get("recipientGroupId");
+            try {
+                targetGroupId = raw != null ? UUID.fromString((String) raw) : null;
+            } catch (IllegalArgumentException | ClassCastException e) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("title", "recipientGroupId must be a valid UUID"));
+            }
+        }
+        if (targetGroupId == null && recipientRepo.countByTemplateId(id) == 0) {
+            return ResponseEntity.badRequest().body(Map.of("title",
+                    "A template must have at least one recipient (either recipientGroupId or an inline recipient list)"));
+        }
+
+        if (updates.containsKey("name"))        t.setName((String) updates.get("name"));
+        if (updates.containsKey("description")) t.setDescription((String) updates.get("description"));
+        if (updates.containsKey("body"))        t.setBody((String) updates.get("body"));
+        if (updates.containsKey("encoding"))    t.setEncoding((String) updates.get("encoding"));
+        if (updates.containsKey("sender"))      t.setSender((String) updates.get("sender"));
+        if (updates.containsKey("recipientGroupId")) t.setRecipientGroupId(targetGroupId);
+        if (updates.containsKey("variables")) {
+            @SuppressWarnings("unchecked")
+            List<String> vars = (List<String>) updates.get("variables");
+            t.setVariables(vars);
+        }
+        // An edited template goes back to DRAFT so it must be re-approved.
+        t.setStatus("DRAFT");
+
+        Template saved = templateRepo.save(t);
+
+        auditService.log(WorkspaceContext.currentWorkspaceId(), "TEMPLATE", "INFO",
+                "TEMPLATE_UPDATED", "TEMPLATE", saved.getId());
+
+        return ResponseEntity.ok(toDto(saved));
     }
 
     @PostMapping("/{id}/approve")

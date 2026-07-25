@@ -3,6 +3,9 @@ package et.com.cog.esms.sender.gateway;
 import et.com.cog.esms.common.dto.StatusEvent;
 import et.com.cog.esms.common.enums.Carrier;
 import et.com.cog.esms.common.enums.MessageStatus;
+import et.com.cog.esms.common.enums.Encoding;
+import et.com.cog.esms.common.sms.Gsm0338;
+import et.com.cog.esms.common.sms.SmsSegments;
 import et.com.cog.esms.sender.config.SmppProperties;
 import et.com.cog.esms.sender.publisher.StatusEventPublisher;
 import jakarta.annotation.PostConstruct;
@@ -44,10 +47,6 @@ import java.util.concurrent.atomic.AtomicReference;
 @RequiredArgsConstructor
 public class NibSmscSmsGateway implements SmsGateway {
 
-    private static final int MAX_GSM7  = 160;
-    private static final int MAX_UCS2  = 70;
-    private static final int SEG_GSM7  = 153;
-    private static final int SEG_UCS2  = 67;
 
     private final SmppProperties     props;
     private final StatusEventPublisher statusPublisher;
@@ -56,6 +55,7 @@ public class NibSmscSmsGateway implements SmsGateway {
     private final AtomicBoolean                running       = new AtomicBoolean(false);
     private final AtomicBoolean                reconnecting  = new AtomicBoolean(false);
     private final AtomicInteger                reconnectCount = new AtomicInteger(0);
+    private final AtomicInteger                sarRefCounter  = new AtomicInteger(0);
     private final ScheduledExecutorService     scheduler     =
             Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "smpp-reconnect");
@@ -99,23 +99,39 @@ public class NibSmscSmsGateway implements SmsGateway {
         }
 
         try {
-            boolean useUcs2 = needsUcs2(request.body());
+            // Honours the encoding the core resolved and recorded on the
+            // message, via the same shared rule, so what is submitted here can
+            // no longer disagree with the stored encoding and segment_count.
+            // (A GSM request for text GSM cannot represent is still upgraded to
+            // UCS-2 inside resolveEncoding rather than being mangled.)
+            boolean useUcs2 = SmsSegments.resolveEncoding(request.body(), request.encoding())
+                    == Encoding.UCS2;
             Alphabet alphabet = useUcs2 ? Alphabet.ALPHA_UCS2 : Alphabet.ALPHA_DEFAULT;
-            int     maxLen  = useUcs2 ? MAX_UCS2 : MAX_GSM7;
+            int     maxLen  = useUcs2 ? SmsSegments.MAX_UCS2 : SmsSegments.MAX_GSM7;
 
             String senderId = (request.senderId() != null && !request.senderId().isBlank())
                     ? request.senderId() : props.getDefaultSenderId();
 
-            if (request.body().length() <= maxLen) {
+            // Measured in the units the limit is actually expressed in:
+            // septets for GSM (an extension char such as '[' costs two), and
+            // UTF-16 code units for UCS-2. String.length() is neither.
+            int encodedLength = useUcs2
+                    ? request.body().length()
+                    : Gsm0338.septetLength(request.body());
+
+            if (encodedLength <= maxLen) {
                 String carrierId = submitSingle(session, request, senderId, alphabet, useUcs2);
                 log.info("SMPP submit_sm OK — msgId={} carrierId={} to={}",
                         request.messageId(), carrierId, request.to());
                 return new SendResult(true, carrierId, null, null);
             } else {
-                String carrierId = submitMultiPart(session, request, senderId, alphabet, useUcs2);
-                log.info("SMPP multi-part submit OK — msgId={} to={}",
-                        request.messageId(), request.to());
-                return new SendResult(true, carrierId, null, null);
+                List<String> carrierIds = submitMultiPart(session, request, senderId, alphabet, useUcs2);
+                // The first segment's id is the primary; all of them are
+                // reported so the core can match a receipt from any segment.
+                String primaryId = carrierIds.isEmpty() ? null : carrierIds.get(0);
+                log.info("SMPP multi-part submit OK — msgId={} segments={} carrierIds={} to={}",
+                        request.messageId(), carrierIds.size(), carrierIds, request.to());
+                return new SendResult(true, primaryId, carrierIds, null, null);
             }
 
         } catch (PDUException e) {
@@ -257,23 +273,36 @@ public class NibSmscSmsGateway implements SmsGateway {
                 (byte) 0,    // replace if present
                 new GeneralDataCoding(alphabet),
                 (byte) 0,    // sm default msg id
-                req.body().getBytes(useUcs2 ? StandardCharsets.UTF_16BE : StandardCharsets.ISO_8859_1)
+                encodeBody(req.body(), useUcs2)
         ).getMessageId();
     }
 
-    private String submitMultiPart(SMPPSession session, SendRequest req,
-                                   String senderId, Alphabet alphabet, boolean useUcs2)
+    private List<String> submitMultiPart(SMPPSession session, SendRequest req,
+                                         String senderId, Alphabet alphabet, boolean useUcs2)
             throws PDUException, ResponseTimeoutException,
                    InvalidResponseException, NegativeResponseException, IOException {
 
-        int    segMax    = useUcs2 ? SEG_UCS2 : SEG_GSM7;
-        String body      = req.body();
-        int    totalSegs = (int) Math.ceil((double) body.length() / segMax);
-        short  sarRef    = (short) (Math.random() * 0xFFFF);
-        String lastId    = null;
+        int    segMax = useUcs2 ? SmsSegments.SEG_UCS2 : SmsSegments.SEG_GSM7;
+        String body   = req.body();
+
+        // Split in the encoding's own units, not raw chars. Slicing by
+        // substring() over-filled GSM segments containing extension
+        // characters (two septets each) and could cut a UCS-2 surrogate pair
+        // in half across a boundary.
+        List<String> segments = useUcs2
+                ? Gsm0338.splitByCodeUnits(body, segMax)
+                : Gsm0338.splitBySeptets(body, segMax);
+        int totalSegs = segments.size();
+
+        // Concatenation reference: must be non-zero and distinct from any other
+        // in-flight multipart to the same handset, or the segments interleave.
+        // A counter is used rather than Math.random(), which could return 0 and
+        // gave no collision guarantee at all.
+        short  sarRef    = nextSarRef();
+        List<String> segmentIds = new ArrayList<>(totalSegs);
 
         for (int i = 0; i < totalSegs; i++) {
-            String seg = body.substring(i * segMax, Math.min((i + 1) * segMax, body.length()));
+            String seg = segments.get(i);
 
             OptionalParameter sarMsgRef = new OptionalParameter.Short(
                     OptionalParameter.Tag.SAR_MSG_REF_NUM.code(), sarRef);
@@ -282,7 +311,7 @@ public class NibSmscSmsGateway implements SmsGateway {
             OptionalParameter sarSeq    = new OptionalParameter.Byte(
                     OptionalParameter.Tag.SAR_SEGMENT_SEQNUM.code(), (byte) (i + 1));
 
-            lastId = session.submitShortMessage(
+            segmentIds.add(session.submitShortMessage(
                     props.getSystemType(),
                     TypeOfNumber.valueOf(props.getSourceAddressTon()),
                     NumberingPlanIndicator.valueOf(props.getSourceAddressNpi()),
@@ -296,23 +325,37 @@ public class NibSmscSmsGateway implements SmsGateway {
                     (byte) 0,
                     new GeneralDataCoding(alphabet),
                     (byte) 0,
-                    seg.getBytes(useUcs2 ? StandardCharsets.UTF_16BE : StandardCharsets.ISO_8859_1),
+                    encodeBody(seg, useUcs2),
                     sarMsgRef, sarTotal, sarSeq
-            ).getMessageId();
+            ).getMessageId());
         }
-        return lastId;
+        return segmentIds;
+    }
+
+    // Wraps at 0xFFFF and skips 0 (0 is a valid-but-ambiguous reference that
+    // some handsets treat as "not concatenated").
+    private short nextSarRef() {
+        int ref = sarRefCounter.updateAndGet(prev -> prev >= 0xFFFF ? 1 : prev + 1);
+        return (short) ref;
     }
 
 
-    private boolean needsUcs2(String text) {
-        final String gsm7 = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\u001bÆæßÉ !\"#¤%&'()*+,-./"
-                + "0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                + "ÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
-        for (char c : text.toCharArray()) {
-            if (gsm7.indexOf(c) == -1) return true;
-        }
-        return false;
+    /**
+     * Encodes the payload for the wire.
+     *
+     * GSM text goes through the GSM 03.38 codec, NOT ISO-8859-1. The two
+     * alphabets share only ASCII letters and digits: '@' is 0x00 here but 0x40
+     * in Latin-1, and every accented and Greek character differs. The old
+     * getBytes(ISO_8859_1) therefore delivered corrupted text for anything
+     * outside plain ASCII - while the alphabet check had already declared
+     * exactly those characters safe to send as GSM.
+     */
+    private byte[] encodeBody(String text, boolean useUcs2) {
+        return useUcs2
+                ? text.getBytes(StandardCharsets.UTF_16BE)
+                : Gsm0338.encode(text);
     }
+
 
     private class SmppDeliveryReceiptListener implements MessageReceiverListener {
 

@@ -58,22 +58,32 @@ app:
       backoff-steps: "30s,2m,10m,1h"
 
   gateway:
+    # These MUST stay nested under nib-smsc — SmppProperties binds
+    # @ConfigurationProperties(prefix = "app.gateway.nib-smsc"). Flattening them
+    # one level (which is how this shipped) binds nothing at all: every field
+    # silently falls back to its Java default and the password stays null, so
+    # the SMPP bind fails with no indication that the NIB_SMSC_* env vars were
+    # ignored.
     nib-smsc:
-    host: ${NIB_SMSC_HOST}
-    port: ${NIB_SMSC_PORT}
-    system-id: ${NIB_SMSC_SYSTEM_ID}
-    password: ${NIB_SMSC_PASSWORD}
-    system-type: ""
-    address-range: ""
-    source-address-ton: 5
-    source-address-npi: 0
-    dest-address-ton: 1
-    dest-address-npi: 1
-    default-sender-id: ${NIB_SMSC_SENDER_ID}
-    enquire-link-timer: 30
-    bind-timeout-ms: 10000
-    reconnect-delay-ms: 30000
-    max-reconnect-attempts: 0
+      host: ${NIB_SMSC_HOST:10.204.181.70}
+      port: ${NIB_SMSC_PORT:5019}
+      system-id: ${NIB_SMSC_SYSTEM_ID:6039}
+      # Deliberately no default. Note that an unset env var does NOT fail
+      # binding on its own — Spring leaves the literal "${NIB_SMSC_PASSWORD}"
+      # in the field — so SmppProperties.validateCredentials() rejects it at
+      # startup instead.
+      password: ${NIB_SMSC_PASSWORD}
+      system-type: ""
+      address-range: ""
+      source-address-ton: 5
+      source-address-npi: 0
+      dest-address-ton: 1
+      dest-address-npi: 1
+      default-sender-id: ${NIB_SMSC_SENDER_ID:NIB}
+      enquire-link-timer: 30
+      bind-timeout-ms: 10000
+      reconnect-delay-ms: 30000
+      max-reconnect-attempts: 0
 
 resilience4j:
   circuitbreaker:

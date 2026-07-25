@@ -21,6 +21,19 @@ import java.util.UUID;
 public class AuditLogController {
 
     private final AuditLogRepository auditLogRepo;
+    private final AuditChainVerifier chainVerifier;
+
+    /**
+     * Recomputes the hash chain and reports any break. Restricted to platform
+     * admins: it is an integrity check on the record of everyone's actions,
+     * and a workspace admin should not be able to probe it.
+     */
+    @GetMapping("/verify")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<AuditChainVerifier.Result> verifyChain(
+            @RequestParam(defaultValue = "0") long maxRows) {
+        return ResponseEntity.ok(chainVerifier.verify(maxRows));
+    }
 
     @GetMapping
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('WORKSPACE_VIEW')")

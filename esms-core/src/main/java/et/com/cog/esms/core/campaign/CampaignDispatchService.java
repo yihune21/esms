@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import et.com.cog.esms.common.dto.SendCommand;
 import et.com.cog.esms.common.enums.Encoding;
 import et.com.cog.esms.common.enums.Priority;
+import et.com.cog.esms.common.sms.SmsSegments;
 import et.com.cog.esms.core.admin.CarrierPrefix;
 import et.com.cog.esms.core.admin.CarrierPrefixRepository;
 import et.com.cog.esms.core.contact.Contact;
@@ -92,7 +93,11 @@ public class CampaignDispatchService {
                 ? campaign.getCustomBody()
                 : (template != null ? template.getBody() : "");
 
-        String encoding = (template != null) ? template.getEncoding() : "GSM7";
+        // Only what the template ASKED for. The alphabet actually used is
+        // resolved per recipient below, because variable substitution decides
+        // it: "${name}" filled with an Amharic name forces UCS-2 for that one
+        // message while the rest of the run stays GSM7.
+        String declaredEncoding = (template != null) ? template.getEncoding() : null;
 
         Workspace workspace = workspaceRepo.findById(campaign.getWorkspaceId()).orElse(null);
         String senderMask = (template != null && template.getSender() != null)
@@ -142,7 +147,10 @@ public class CampaignDispatchService {
         for (RecipientInfo recipient : recipients.values()) {
             String resolvedBody = resolveMessageBody(bodyTemplate, recipient.getName(), recipient.getPhone(), recipient.getExtra());
             String carrier = resolveCarrier(recipient.getPhone(), prefixes);
-            short segmentCount = calculateSegmentCount(resolvedBody, encoding);
+            // Resolved with the same shared rule the gateway applies, so the
+            // stored encoding and segment count describe what is really sent.
+            Encoding encoding = SmsSegments.resolveEncoding(resolvedBody, declaredEncoding);
+            short segmentCount = (short) SmsSegments.count(resolvedBody, encoding);
 
             Message msg = Message.builder()
                     .workspaceId(campaign.getWorkspaceId())
@@ -150,7 +158,7 @@ public class CampaignDispatchService {
                     .contactId(recipient.getContactId())
                     .toNumber(recipient.getPhone())
                     .body(resolvedBody)
-                    .encoding(encoding)
+                    .encoding(encoding.name())
                     .segmentCount(segmentCount)
                     .resolvedCarrier(carrier)
                     .source("CAMPAIGN")
@@ -166,7 +174,7 @@ public class CampaignDispatchService {
                     .senderMask(senderMask)
                     .to(recipient.getPhone())
                     .body(resolvedBody)
-                    .encoding(Encoding.valueOf(encoding))
+                    .encoding(encoding)
                     .priority(Priority.NORMAL)
                     .resolvedCarrier(carrier)
                     .issuedAt(Instant.now())
@@ -208,7 +216,11 @@ public class CampaignDispatchService {
                 ? reminder.getCustomBody()
                 : (template != null ? template.getBody() : "");
 
-        String encoding = (template != null) ? template.getEncoding() : "GSM7";
+        // Only what the template ASKED for. The alphabet actually used is
+        // resolved per recipient below, because variable substitution decides
+        // it: "${name}" filled with an Amharic name forces UCS-2 for that one
+        // message while the rest of the run stays GSM7.
+        String declaredEncoding = (template != null) ? template.getEncoding() : null;
 
         Workspace workspace = workspaceRepo.findById(reminder.getWorkspaceId()).orElse(null);
         String senderMask = (template != null && template.getSender() != null)
@@ -241,7 +253,10 @@ public class CampaignDispatchService {
         for (RecipientInfo recipient : recipients.values()) {
             String resolvedBody = resolveMessageBody(bodyTemplate, recipient.getName(), recipient.getPhone(), recipient.getExtra());
             String carrier = resolveCarrier(recipient.getPhone(), prefixes);
-            short segmentCount = calculateSegmentCount(resolvedBody, encoding);
+            // Resolved with the same shared rule the gateway applies, so the
+            // stored encoding and segment count describe what is really sent.
+            Encoding encoding = SmsSegments.resolveEncoding(resolvedBody, declaredEncoding);
+            short segmentCount = (short) SmsSegments.count(resolvedBody, encoding);
 
             Message msg = Message.builder()
                     .workspaceId(reminder.getWorkspaceId())
@@ -249,7 +264,7 @@ public class CampaignDispatchService {
                     .contactId(recipient.getContactId())
                     .toNumber(recipient.getPhone())
                     .body(resolvedBody)
-                    .encoding(encoding)
+                    .encoding(encoding.name())
                     .segmentCount(segmentCount)
                     .resolvedCarrier(carrier)
                     .source("AUTO_SCHEDULER")
@@ -264,7 +279,7 @@ public class CampaignDispatchService {
                     .senderMask(senderMask)
                     .to(recipient.getPhone())
                     .body(resolvedBody)
-                    .encoding(Encoding.valueOf(encoding))
+                    .encoding(encoding)
                     .priority(Priority.NORMAL)
                     .resolvedCarrier(carrier)
                     .issuedAt(Instant.now())
@@ -358,18 +373,5 @@ public class CampaignDispatchService {
             }
         }
         return bestMatch != null ? bestMatch.getCarrier() : "UNKNOWN";
-    }
-
-    private short calculateSegmentCount(String body, String encoding) {
-        if (body == null || body.isEmpty()) return 1;
-        boolean isUcs2 = "UCS2".equalsIgnoreCase(encoding);
-        int length = body.length();
-        if (isUcs2) {
-            if (length <= 70) return 1;
-            return (short) Math.ceil((double) length / 67);
-        } else {
-            if (length <= 160) return 1;
-            return (short) Math.ceil((double) length / 153);
-        }
     }
 }
