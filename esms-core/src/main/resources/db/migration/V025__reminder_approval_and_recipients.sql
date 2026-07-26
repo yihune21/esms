@@ -9,9 +9,9 @@
 
 -- Existing reminders predate the approval step — grandfather them straight to
 -- APPROVED so they keep firing exactly as before instead of getting stranded.
+ALTER TABLE schedule DROP CONSTRAINT IF EXISTS schedule_status_check;
 UPDATE schedule SET status = 'APPROVED' WHERE status = 'PENDING';
 
-ALTER TABLE schedule DROP CONSTRAINT IF EXISTS schedule_status_check;
 ALTER TABLE schedule
     ALTER COLUMN status SET DEFAULT 'PENDING_APPROVAL',
     ADD CONSTRAINT schedule_status_check
