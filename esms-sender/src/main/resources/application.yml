@@ -43,15 +43,37 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+      # SmppHealthIndicator reports DEGRADED while the SMPP link is down but a
+      # reconnect is pending. Spring Boot knows nothing about a custom status:
+      # it is absent from the default severity order and unmapped statuses fall
+      # back to HTTP 200, so /actuator/health answered UP for the ~30s of every
+      # 40s reconnect cycle spent waiting — a sender incapable of delivering a
+      # single message, telling every orchestrator it was fine.
+      #
+      # Ranked below UP and mapped to 503 so the HTTP contract matches reality,
+      # while the body still distinguishes DEGRADED from a hard DOWN.
+      #
+      # DOWN and OUT_OF_SERVICE are restated deliberately. Spring Boot's
+      # SimpleHttpCodeStatusMapper REPLACES its default mapping wholesale as
+      # soon as this map is non-empty rather than merging into it, so listing
+      # only DEGRADED silently dropped DOWN -> 503 and a hard-down sender
+      # started answering 200.
+      status:
+        order: DOWN,OUT_OF_SERVICE,DEGRADED,UP,UNKNOWN
+        http-mapping:
+          DOWN: 503
+          OUT_OF_SERVICE: 503
+          DEGRADED: 503
 
 app:
   sender:
     concurrency:
       nib-smsc: ${SENDER_CONCURRENCY_NIB:50}
 
-    timeouts:
-      connect: PT5S
-      read: PT15S
+    # NOTE: there is deliberately no app.sender.timeouts block here. It used to
+    # define connect/read timeouts that nothing read, sitting right next to a
+    # real SMPP connect timeout — two settings with the same name, one of them
+    # inert. The SMPP timeouts live under app.gateway.nib-smsc below.
 
     retry:
       max-attempts: 5
@@ -81,6 +103,11 @@ app:
       dest-address-npi: 1
       default-sender-id: ${NIB_SMSC_SENDER_ID:NIB}
       enquire-link-timer: 30
+      # Bounds the TCP connect. Without it jsmpp blocks for the OS SYN-retry
+      # default (~130s on Linux), which is what made each failed reconnect cycle
+      # take ~2m45s instead of the 30s the log line claims.
+      connect-timeout-ms: 10000
+      # Bounds the wait for the bind response, once the socket is already open.
       bind-timeout-ms: 10000
       reconnect-delay-ms: 30000
       max-reconnect-attempts: 0

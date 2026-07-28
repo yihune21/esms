@@ -63,6 +63,17 @@ public class SmppProperties {
 
     private int enquireLinkTimer = 30;
 
+    /**
+     * Bound on the TCP connect, milliseconds.
+     *
+     * Separate from bindTimeoutMs because they cover different phases and only
+     * this one is under our control: jsmpp bounds the bind RESPONSE, never the
+     * socket connect, which otherwise runs to the OS SYN-retry default of
+     * roughly 130 seconds. See TimeoutSocketConnectionFactory.
+     */
+    private int connectTimeoutMs = 10_000;
+
+    /** Bound on waiting for the bind response, once the socket is open. */
     private long bindTimeoutMs = 10_000;
 
     private long reconnectDelayMs = 30_000;

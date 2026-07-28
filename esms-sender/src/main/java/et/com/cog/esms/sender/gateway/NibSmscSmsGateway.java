@@ -64,12 +64,27 @@ public class NibSmscSmsGateway implements SmsGateway {
             });
 
  
+    /**
+     * Starts the link WITHOUT blocking application startup.
+     *
+     * The first bind used to run inline here, so an unreachable SMSC held the
+     * Spring context hostage for the whole TCP connect — observed at 142 seconds
+     * to start, against a compose healthcheck whose start_period is 60s. The
+     * container was therefore marked unhealthy before it had finished booting,
+     * and nothing else in the service (the Rabbit consumer, /actuator) could
+     * come up either, even though none of it depends on the SMSC.
+     *
+     * The bind now happens on the reconnect thread. Until it succeeds,
+     * sendSms() returns SESSION_NOT_BOUND, which SendCommandConsumer treats as
+     * retryable — so messages ride the backoff queues rather than being lost,
+     * and health() reports UNAVAILABLE the whole time.
+     */
     @PostConstruct
     public void connect() {
         running.set(true);
-        log.info("NibSmscSmsGateway starting — host={}:{} systemId={}",
+        log.info("NibSmscSmsGateway starting — host={}:{} systemId={} (binding asynchronously)",
                 props.getHost(), props.getPort(), props.getSystemId());
-        bindSession();
+        scheduler.execute(this::bindSession);
     }
 
     @PreDestroy
@@ -190,7 +205,10 @@ public class NibSmscSmsGateway implements SmsGateway {
             log.info("SMPP connecting to {}:{} systemId='{}'",
                     props.getHost(), props.getPort(), props.getSystemId());
 
-            SMPPSession session = new SMPPSession();
+            // Bounded TCP connect. jsmpp's default factory blocks for the OS
+            // SYN-retry budget (~130s) regardless of the bind timeout below.
+            SMPPSession session = new SMPPSession(
+                    new TimeoutSocketConnectionFactory(props.getConnectTimeoutMs()));
             session.setMessageReceiverListener(new SmppDeliveryReceiptListener());
             session.addSessionStateListener(new SmppSessionStateListener());
             session.setEnquireLinkTimer(props.getEnquireLinkTimer() * 1000);
