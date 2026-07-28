@@ -62,61 +62,93 @@ public class ActiveDirectoryAuthenticator {
      */
     public AdAuthResult authenticate(String username, String password) {
         if (!props.isEnabled()) {
+            log.info("  [AD] skipped — app.ad.enabled=false, login will use the local password");
             return AdAuthResult.of(AdAuthResult.Status.DISABLED);
         }
         // A simple bind with an empty password is an ANONYMOUS bind, and AD
         // answers it with success. Without this check an empty password would
         // authenticate every account in the domain.
         if (username == null || username.isBlank() || password == null || password.isEmpty()) {
+            log.warn("  [AD] refused before contacting the directory — blank username or password "
+                    + "(an empty password would otherwise be an anonymous bind, which AD accepts)");
             return AdAuthResult.of(AdAuthResult.Status.BAD_CREDENTIALS);
         }
 
+        log.info("  [AD] 1/5 binding as the service account — url={} serviceDn='{}'",
+                props.getUrl(), props.getServiceDn());
         DirContext serviceContext = null;
         try {
+            long t0 = System.currentTimeMillis();
             serviceContext = bind(props.getServiceDn(), props.getServicePassword());
+            log.info("  [AD] 1/5 service bind OK ({}ms)", System.currentTimeMillis() - t0);
         } catch (AuthenticationException e) {
             // Our own service account was rejected — a configuration fault, not
             // a user error, and it would otherwise look like every staff member
             // suddenly had the wrong password.
-            log.error("AD service account '{}' was rejected by {} — check AD_SERVICE_DN and "
-                            + "AD_SERVICE_PASSWORD. No one can sign in via AD until this is fixed.",
-                    props.getServiceDn(), props.getUrl());
+            log.error("  [AD] 1/5 SERVICE BIND REJECTED by {} for serviceDn='{}'. {} "
+                            + "Check AD_SERVICE_DN and AD_SERVICE_PASSWORD — no one can sign in "
+                            + "via AD until this is fixed.",
+                    props.getUrl(), props.getServiceDn(), explainBindFailure(e.getMessage()));
             return AdAuthResult.of(AdAuthResult.Status.DIRECTORY_UNAVAILABLE);
         } catch (NamingException e) {
-            log.error("Could not reach the domain controller at {}: {}", props.getUrl(), e.getMessage());
+            log.error("  [AD] 1/5 CANNOT REACH the domain controller at {} — {}: {}",
+                    props.getUrl(), e.getClass().getSimpleName(), e.getMessage());
             return AdAuthResult.of(AdAuthResult.Status.DIRECTORY_UNAVAILABLE);
         }
 
         try {
+            log.info("  [AD] 2/5 searching for the user — base='{}' filter='{}' scope=SUBTREE arg='{}'",
+                    props.getBaseDn(), props.getUserSearchFilter(), username);
+            long t1 = System.currentTimeMillis();
             SearchResult entry = findUser(serviceContext, username);
             if (entry == null) {
-                log.debug("No AD entry for '{}' under {}", username, props.getBaseDn());
+                log.info("  [AD] 2/5 no entry found for '{}' under {} ({}ms) — login may fall back "
+                                + "to a local password", username, props.getBaseDn(),
+                        System.currentTimeMillis() - t1);
                 return AdAuthResult.of(AdAuthResult.Status.NOT_IN_DIRECTORY);
             }
 
             Attributes attrs = entry.getAttributes();
             int uac = intAttribute(attrs, "userAccountControl");
-            if ((uac & UAC_ACCOUNT_DISABLED) != 0) {
-                log.warn("AD account '{}' is disabled in the directory", username);
-                return AdAuthResult.of(AdAuthResult.Status.ACCOUNT_DISABLED);
-            }
-            if ((uac & UAC_PASSWORD_EXPIRED) != 0) {
-                log.warn("AD account '{}' has an expired password", username);
-                return AdAuthResult.of(AdAuthResult.Status.ACCOUNT_DISABLED);
-            }
-
             // Absolute DN. entry.getName() is relative to the search base, so
             // binding with it would fail for anyone not sitting directly under
             // the base DN.
             String userDn = entry.getNameInNamespace();
+            log.info("  [AD] 3/5 entry found ({}ms) — dn='{}' sam='{}' displayName='{}' mail='{}' "
+                            + "userAccountControl={}",
+                    System.currentTimeMillis() - t1, userDn,
+                    stringAttribute(attrs, "sAMAccountName"),
+                    stringAttribute(attrs, "displayName"),
+                    stringAttribute(attrs, "mail"), uac);
 
+            if ((uac & UAC_ACCOUNT_DISABLED) != 0) {
+                log.warn("  [AD] 3/5 REJECTED — account '{}' is disabled in the directory "
+                        + "(userAccountControl={} has bit 0x2 set)", username, uac);
+                return AdAuthResult.of(AdAuthResult.Status.ACCOUNT_DISABLED);
+            }
+            if ((uac & UAC_PASSWORD_EXPIRED) != 0) {
+                log.warn("  [AD] 3/5 REJECTED — account '{}' has an expired password "
+                        + "(userAccountControl={} has bit 0x800000 set)", username, uac);
+                return AdAuthResult.of(AdAuthResult.Status.ACCOUNT_DISABLED);
+            }
+
+            log.info("  [AD] 4/5 re-binding as the user to verify their password — dn='{}'", userDn);
             DirContext userContext = null;
             try {
+                long t2 = System.currentTimeMillis();
                 userContext = bind(userDn, password);
+                log.info("  [AD] 5/5 user bind OK ({}ms) — credentials verified by the directory",
+                        System.currentTimeMillis() - t2);
             } catch (AuthenticationException e) {
+                // AD encodes the real reason as "data <hex>" in the message:
+                // 52e bad password, 525 no such user, 530/531 time/workstation
+                // restriction, 532 password expired, 533 disabled, 701 expired,
+                // 773 must change password, 775 locked out.
+                log.warn("  [AD] 5/5 REJECTED — the directory refused this user's password. {}",
+                        explainBindFailure(e.getMessage()));
                 return AdAuthResult.of(AdAuthResult.Status.BAD_CREDENTIALS);
             } catch (NamingException e) {
-                log.error("AD bind for '{}' failed: {}", username, e.getMessage());
+                log.error("  [AD] 5/5 user bind failed for '{}': {}", username, e.getMessage());
                 return AdAuthResult.of(AdAuthResult.Status.DIRECTORY_UNAVAILABLE);
             } finally {
                 close(userContext);
@@ -192,6 +224,38 @@ public class ActiveDirectoryAuthenticator {
         } catch (NamingException e) {
             log.debug("Closing LDAP context failed: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Turns Active Directory's opaque bind rejection into something readable.
+     *
+     * AD reports every simple-bind failure as LDAP 49 and hides the real reason
+     * in a "data &lt;hex&gt;" fragment of the message. Worse, this DC returns
+     * 52e ("bad password") for a non-existent account too, so the code alone
+     * cannot distinguish a wrong password from a wrong username — which is
+     * exactly the ambiguity that makes these failures expensive to diagnose.
+     * Spelling that out here saves the next person from guessing.
+     */
+    static String explainBindFailure(String message) {
+        if (message == null || !message.contains("data ")) {
+            return "The directory gave no reason code.";
+        }
+        String code = message.substring(message.indexOf("data ") + 5).split("[,\\s]")[0];
+        String meaning = switch (code) {
+            case "525" -> "no such user";
+            case "52e" -> "bad password — NOTE: this DC also returns 52e for an account that "
+                    + "does not exist, so verify the sAMAccountName as well as the password";
+            case "530" -> "not permitted to log on at this time";
+            case "531" -> "not permitted to log on from this workstation";
+            case "532" -> "password expired";
+            case "533" -> "account disabled";
+            case "701" -> "account expired";
+            case "773" -> "user must change password at next logon — a service account with this "
+                    + "flag set can never bind; clear it in ADUC";
+            case "775" -> "account locked out";
+            default    -> "unrecognised reason code";
+        };
+        return "AD reason: data " + code + " = " + meaning + ".";
     }
 
     private static String stringAttribute(Attributes attrs, String name) throws NamingException {

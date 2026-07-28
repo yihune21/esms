@@ -56,60 +56,121 @@ public class AuthController {
     private final AdUserProvisioningService adProvisioningService;
 
 
+    /**
+     * Every log line in this method is prefixed "[login <id>]" with a short
+     * per-request id, so the steps of one sign-in can be followed with a single
+     * grep even while other people are signing in concurrently:
+     *
+     *     docker compose logs esms-core | grep '\[login 4f2a91c7\]'
+     *
+     * The submitted PASSWORD is never logged, at any level — not here, not in
+     * ActiveDirectoryAuthenticator. Everything else about the attempt is.
+     */
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req,
                                    HttpServletRequest httpReq,
                                    HttpServletResponse response) {
+        String cid = UUID.randomUUID().toString().substring(0, 8);
+        long startedAt = System.currentTimeMillis();
         String ip = getClientIp(httpReq);
-        if (lockoutService.isIpBlocked(ip)) {
+        String username = req.getUsername();
+
+        log.info("[login {}] STEP 1/7 request received — username='{}' ip={} userAgent='{}'",
+                cid, username, ip, httpReq.getHeader("User-Agent"));
+
+        boolean ipBlocked = lockoutService.isIpBlocked(ip);
+        boolean accountLocked = !ipBlocked && lockoutService.isLocked(username);
+        log.info("[login {}] STEP 2/7 lockout checks — ipBlocked={} accountLocked={}",
+                cid, ipBlocked, accountLocked);
+
+        if (ipBlocked) {
             auditService.log(null, "AUTH", "WARN", "LOGIN_BLOCKED_IP", "User", null);
-            return problem(429, "Too many requests from this IP");
+            return reject(cid, startedAt, 429, "Too many requests from this IP",
+                    "too many failed attempts from ip=" + ip);
         }
-
-        if (lockoutService.isLocked(req.getUsername())) {
+        if (accountLocked) {
             auditService.log(null, "AUTH", "WARN", "LOGIN_ACCOUNT_LOCKED", "User", null);
-            return problem(423, "Account locked");
+            return reject(cid, startedAt, 423, "Account locked",
+                    "account is in the lockout window");
         }
 
-        AdAuthResult ad = adAuthenticator.authenticate(req.getUsername(), req.getPassword());
+        log.info("[login {}] STEP 3/7 active directory — enabled={} handing '{}' to the authenticator",
+                cid, adAuthenticator.isEnabled(), username);
+        long adStartedAt = System.currentTimeMillis();
+        AdAuthResult ad = adAuthenticator.authenticate(username, req.getPassword());
+        long adMs = System.currentTimeMillis() - adStartedAt;
+
+        log.info("[login {}] STEP 4/7 active directory result — status={} mayFallBackToLocal={} took={}ms{}",
+                cid, ad.status(), ad.mayFallBackToLocal(), adMs,
+                ad.user() != null ? " dn=" + ad.user().distinguishedName() : "");
 
         AppUser user;
         if (ad.status() == AdAuthResult.Status.AUTHENTICATED) {
             // AD said yes. Create or refresh the local row that carries the
             // workspace membership and permissions.
             user = adProvisioningService.provision(ad.user());
+            log.info("[login {}] STEP 5/7 provisioning — local user id={} username='{}' adSam='{}' status={}",
+                    cid, user.getId(), user.getUsername(), user.getAdSam(), user.getStatus());
             auditService.log(null, "AUTH", "INFO", "LOGIN_AD_BIND_OK", "User", user.getId());
 
         } else if (ad.mayFallBackToLocal()) {
             // AD does not hold this account, is switched off, or is unreachable.
-            var localResult = authenticateLocally(req, ip);
-            if (localResult.rejection() != null) return localResult.rejection();
+            log.info("[login {}] STEP 5/7 falling back to the local password hash — reason={}",
+                    cid, ad.status());
+            var localResult = authenticateLocally(cid, req, ip);
+            if (localResult.rejection() != null) {
+                log.info("[login {}] OUTCOME rejected by local authentication — took={}ms",
+                        cid, System.currentTimeMillis() - startedAt);
+                return localResult.rejection();
+            }
             user = localResult.user();
+            log.info("[login {}] STEP 5/7 local password accepted — user id={} username='{}'",
+                    cid, user.getId(), user.getUsername());
 
         } else if (ad.status() == AdAuthResult.Status.ACCOUNT_DISABLED) {
             auditService.log(null, "AUTH", "WARN", "LOGIN_AD_ACCOUNT_DISABLED", "User", null);
-            return problem(423, "Your domain account is disabled or its password has expired. "
-                    + "Contact the IT department.");
+            return reject(cid, startedAt, 423,
+                    "Your domain account is disabled or its password has expired. "
+                            + "Contact the IT department.",
+                    "active directory reports the account disabled or password-expired");
 
         } else {
             // AD knows this account and rejected the password. Deliberately no
             // fallback to the local hash — a stale local password must not
             // outlive the directory's own answer.
-            boolean locked = lockoutService.recordFailure(req.getUsername(), ip);
+            boolean locked = lockoutService.recordFailure(username, ip);
             auditService.log(null, "AUTH", locked ? "CRITICAL" : "WARN",
                     locked ? "LOGIN_ACCOUNT_LOCKED_OUT" : "LOGIN_AD_BAD_PASSWORD", "User", null);
-            return locked ? problem(423, "Account locked") : problem(401, "Invalid credentials");
+            return reject(cid, startedAt, locked ? 423 : 401,
+                    locked ? "Account locked" : "Invalid credentials",
+                    "active directory rejected the password; local fallback deliberately not attempted"
+                            + (locked ? "; this failure tripped the lockout threshold" : ""));
         }
 
+        log.info("[login {}] STEP 6/7 account status check — status={}", cid, user.getStatus());
         if (!"ACTIVE".equals(user.getStatus())) {
             // Deactivating someone in eSMS keeps them out even while their
             // domain account stays perfectly valid.
             auditService.log(null, "AUTH", "WARN", "LOGIN_ACCOUNT_DISABLED", "User", user.getId());
-            return problem(423, "Account disabled");
+            return reject(cid, startedAt, 423, "Account disabled",
+                    "authentication succeeded but the eSMS account is " + user.getStatus());
         }
 
-        lockoutService.clearFailures(req.getUsername());
-        return issueSession(user.getId(), user.getUsername(), response);
+        lockoutService.clearFailures(username);
+        log.info("[login {}] STEP 7/7 issuing session for user id={}", cid, user.getId());
+        ResponseEntity<?> issued = issueSession(user.getId(), user.getUsername(), response);
+        log.info("[login {}] OUTCOME {} — total={}ms",
+                cid, issued.getStatusCode().value() == 200 ? "SUCCESS" : "blocked at session issue",
+                System.currentTimeMillis() - startedAt);
+        return issued;
+    }
+
+    /** Logs the reason a login was refused, then returns the problem response. */
+    private ResponseEntity<Map<String, Object>> reject(String cid, long startedAt,
+                                                       int status, String title, String why) {
+        log.warn("[login {}] OUTCOME rejected {} — {} ({}) total={}ms",
+                cid, status, title, why, System.currentTimeMillis() - startedAt);
+        return problem(status, title);
     }
 
     /**
@@ -118,15 +179,21 @@ public class AuthController {
      * @return either the authenticated user or the response to send back —
      *         exactly one is non-null.
      */
-    private LocalAuthOutcome authenticateLocally(LoginRequest req, String ip) {
+    private LocalAuthOutcome authenticateLocally(String cid, LoginRequest req, String ip) {
         var userOpt = userRepository.findByUsername(req.getUsername());
+        log.info("[login {}] local lookup — username='{}' foundInDatabase={}",
+                cid, req.getUsername(), userOpt.isPresent());
+
         if (userOpt.isEmpty()) {
             lockoutService.recordFailure(req.getUsername(), ip);
             auditService.log(null, "AUTH", "WARN", "LOGIN_UNKNOWN_USERNAME", "User", null);
+            log.warn("[login {}] no such user in Active Directory OR the local database", cid);
             return LocalAuthOutcome.rejected(problem(401, "Invalid credentials"));
         }
 
         var user = userOpt.get();
+        log.info("[login {}] local candidate — id={} status={} adSam={} hasLocalPassword={}",
+                cid, user.getId(), user.getStatus(), user.getAdSam(), user.getPasswordHash() != null);
 
         // Once an account has bound against AD successfully, the directory owns
         // it — and keeps owning it while the DC is unreachable. Otherwise
@@ -145,8 +212,11 @@ public class AuthController {
                     "Cannot reach the domain controller to verify your account. Please try again shortly."));
         }
 
-        if (user.getPasswordHash() == null
-                || !passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
+        boolean passwordMatches = user.getPasswordHash() != null
+                && passwordEncoder.matches(req.getPassword(), user.getPasswordHash());
+        log.info("[login {}] local password check — matches={}", cid, passwordMatches);
+
+        if (!passwordMatches) {
             boolean locked = lockoutService.recordFailure(req.getUsername(), ip);
             if (locked) {
                 auditService.log(null, "AUTH", "CRITICAL", "LOGIN_ACCOUNT_LOCKED_OUT", "User", user.getId());
