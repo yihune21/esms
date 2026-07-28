@@ -14,9 +14,28 @@ We successfully built a **Modular Monolith (eSMS-Core)** combined with an **Asyn
 ### 2. Core Security & Identity
 
 - Implemented a secure **Stateless JWT** architecture using HMAC-SHA (ready to be swapped for RSA in production).
-- Engineered the **OTP Service** and **Session Service** using Redis with a sliding 5-minute idle timeout window.
+- Integrated **Active Directory** against the NIC domain controller (`NICDCSrv2.nibins.com:389`). Sign-in is a search-then-bind: the read-only `SMS.Service` account looks up the `sAMAccountName` by subtree search from `DC=nibins,DC=com`, then eSMS re-binds as that user's DN with the password they typed. A first successful bind provisions the local `app_user` row; AD remains the system of record for name and email. Verified end to end against the live directory.
+
+> [!WARNING]
+> **The AD link is unencrypted.** NIC does not run LDAPS — both domain controllers
+> accept TCP on 636/3269 and then reset every TLS handshake, which is what a DC with
+> no LDAPS certificate does. Running on plain `ldap://…:389` is a deliberate decision,
+> and it means every password an LDAP simple bind carries — each user's at login, and
+> the service account's on every lookup — crosses the network in readable plaintext.
+> eSMS logs a `WARN` at startup whenever `app.ad.url` is not `ldaps://`.
+> If IT ever installs a certificate, the only change needed is
+> `AD_URL=ldaps://NICDCSrv2.nibins.com:636`.
+- Sign-in is a **single step**. The platform is reachable only from the NIC LAN, so the SMS OTP that used to follow the password has been removed — along with its dependency on the SMSC being up and on every member of staff having a mobile number on file.
+- Accounts Active Directory does not hold (the seeded `superadmin`) fall back to a **local BCrypt password**. Two cases are deliberately excluded from that fallback: an account AD holds and *rejects*, and any account already linked to AD (`app_user.ad_sam` set) while the domain controller is unreachable — otherwise taking the DC off the network would silently re-enable superseded local passwords across the whole system.
+- Engineered the **Session Service** using Redis with a sliding 5-minute idle timeout window.
 - Implemented brute-force protection via the **Lockout Service** (IP and Username tracking).
 - Created the **WorkspaceContext Filter**, which injects tenant boundaries into every authenticated request based on the JWT payload.
+
+> [!IMPORTANT]
+> Passing the AD bind grants a **session, not permissions**. A newly provisioned
+> account has no workspace membership and therefore no authority at all until an
+> administrator assigns it a workspace and role. `POST /auth/login` reports this
+> as `awaitingWorkspaceAssignment: true`.
 
 ### 3. Business Logic & Approvals
 
@@ -49,6 +68,8 @@ we have structured the project to run entirely via Docker.
 
 ## Next Steps
 
-1. **Environment Configuration**: Before deploying or running locally, make sure to create a `.env` file in the root directory (copied from the configuration format) and populate `NIB_SMSC_PASSWORD` with the real SMPP credentials. Ensure this file is never committed to Git.
-2. **Network Reachability**: The sender microservice must be deployed on a server that has network reachability to the NIB internal SMSC (`10.204.181.70:5019`).
-3. **Active Directory Binding**: The `AuthController` currently stubs local DB authentication but is architected to be swapped with an LDAP bind once the NIC IT department provisions the service account.
+1. **Environment Configuration**: Before deploying or running locally, make sure to create a `.env` file in the root directory (copied from the configuration format) and populate `NIB_SMSC_PASSWORD` with the real SMPP credentials and `AD_SERVICE_PASSWORD` with the `SMS Service` account password. Ensure this file is never committed to Git — it is already in `.gitignore`.
+2. **Network Reachability**: The sender microservice must be deployed on a server that has network reachability to the NIB internal SMSC (`10.204.181.70:5019`), and eSMS Core needs a route to the domain controller on port 389. The core container must also be able to resolve `NICDCSrv2.nibins.com` — if its DNS differs from the host's, use the IP (`10.10.130.22`) in `AD_URL` instead.
+3. **Active Directory service account**: `AD_SERVICE_DN` is `nibins\SMS.Service` — the NT4 `DOMAIN\sAMAccountName` form, chosen over a DN so it survives the account being moved between OUs. Note that the account's `CN` is `SMS Service` (a space) while its `sAMAccountName` is `SMS.Service` (a dot), and it lives at `CN=SMS Service,OU=Information Technology Dept,OU=Chief Executive Officer(CEO),OU=Board Of Directors,DC=nibins,DC=com` — there is no `OU=ServiceAccounts`. If a bind ever fails, get the login name from ADUC's **"User logon name (pre-Windows 2000)"** field, never from the displayed name; this DC returns `data 52e` for both a wrong password and a missing account, so the error cannot tell them apart.
+4. **Search base must stay at the domain root.** Staff live under `OU=…,OU=NIC,DC=nibins,DC=com`, a different branch from the `OU=Board Of Directors` hierarchy, and branch OUs nest several levels deep. `AD_BASE_DN=DC=nibins,DC=com` with subtree scope covers all of it; narrowing it to a single OU would silently exclude whole departments.
+5. **Running without a domain controller**: Set `AD_ENABLED=false` to skip the directory entirely and authenticate against local passwords. Startup deliberately fails when AD is enabled but `AD_SERVICE_PASSWORD` is unset, rather than failing later at the first login.

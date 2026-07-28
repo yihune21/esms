@@ -58,13 +58,6 @@ spring:
       write-dates-as-timestamps: false
     default-property-inclusion: non_null
     time-zone: UTC
-  ldap:
-    urls: ldaps://NICDCSrv2.nibins.com:636
-    base-dn: DC=nibins,DC=com
-    service-account-dn: CN=SMS Service,OU=ServiceAccounts,DC=nibins,DC=com
-    service-account-password: ${AD_SERVICE_PASSWORD}
-    user-search-base: ""
-    user-search-filter: "(sAMAccountName={0})"
 
 server:
   port: ${APP_PORT_CORE:8080}
@@ -98,22 +91,11 @@ app:
       issuer: esms-core
     idle-threshold: PT5M
     mobile:
-      # Base64 AES key protecting app_user.mobile_enc. Rotating it makes every
-      # stored number unreadable, so OTP login stops working until they are
-      # re-entered. Dev default only.
+      # Base64 AES key protecting app_user.mobile_enc. Staff mobile numbers are
+      # a contact-detail field only — sign-in no longer uses them. Rotating this
+      # key makes every stored number unreadable until it is re-entered.
+      # Dev default only.
       encryption-key: ${MOBILE_ENCRYPTION_KEY:ZGV2LW9ubHktMzItYnl0ZS1tb2JpbGUta2V5ISEhISE=}
-    otp:
-      # The seeded administrator may sign in without an OTP for as long as it
-      # has no mobile number, so a new deployment can be entered once to set
-      # one. Blank disables the bypass.
-      bootstrap-username: ${OTP_BOOTSTRAP_USERNAME:superadmin}
-      sender-mask: ${OTP_SENDER_MASK:NIB}
-      sms-template: "Your NIC eSMS verification code is {otp}. It expires in 5 minutes. Do not share it."
-      ttl: PT5M
-      length: 6
-      max-attempts: 3
-      resend-cooldown: PT30S
-      max-resends: 3
     lockout:
       threshold: 5
       duration: PT15M
@@ -130,14 +112,31 @@ app:
   retention:
     period: P1Y
 
+  # The ONLY Active Directory configuration. A second, contradictory spring.ldap
+  # block used to sit above (different host, different base DN) and bound
+  # nothing — Spring's LdapProperties has no service-account-* fields, so those
+  # keys were silently dropped. ActiveDirectoryProperties reads this block and
+  # fails startup if a value is missing rather than at first login.
   ad:
-    enabled: ${AD_ENABLED:false}
-    url: ${AD_URL:ldaps://ad.nib.internal:636}
-    service-dn: ${AD_SERVICE_DN:CN=svc-esms,OU=ServiceAccounts,DC=nib,DC=local}
-    service-password: ${AD_SERVICE_PASSWORD:}
-    base-dn: ${AD_BASE_DN:OU=Users,DC=nib,DC=local}
+    enabled: ${AD_ENABLED:true}
+    # Plain LDAP, not LDAPS: NIC does not run LDAPS and both domain controllers
+    # reset every TLS handshake on 636. Simple binds therefore carry passwords
+    # in cleartext — ActiveDirectoryProperties logs a WARN about it at startup.
+    # Switch to ldaps://…:636 if a certificate is ever installed on the DCs.
+    url: ${AD_URL:ldap://NICDCSrv2.nibins.com:389}
+    base-dn: ${AD_BASE_DN:DC=nibins,DC=com}
+    # Read-only service account, used only to look up the DN of whoever is
+    # signing in. Authentication itself is a second bind as that user.
+    #
+    # NT4 form, not a DN: the account's CN is "SMS Service" (space) while its
+    # sAMAccountName is "SMS.Service" (dot), and it sits four OUs deep under
+    # OU=Board Of Directors — there is no OU=ServiceAccounts. Binding by account
+    # name avoids depending on any of that.
+    service-dn: ${AD_SERVICE_DN:nibins\SMS.Service}
+    # Deliberately no default — supplied by AD_SERVICE_PASSWORD from .env.
+    service-password: ${AD_SERVICE_PASSWORD}
     user-search-filter: "(&(objectClass=user)(sAMAccountName={0}))"
-    connect-timeout: 2000
+    connect-timeout: 5000
     read-timeout: 5000
 
   scheduler:

@@ -29,8 +29,9 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/auth/login", "/auth/verify-otp",
-                                 "/auth/refresh", "/auth/resend-otp").permitAll()
+                // /auth/login now completes sign-in on its own — the OTP step,
+                // and with it /auth/verify-otp and /auth/resend-otp, is gone.
+                .requestMatchers("/auth/login", "/auth/refresh").permitAll()
                 .requestMatchers("/health", "/ready", "/metrics",
                                  "/actuator/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/swagger-ui.html",

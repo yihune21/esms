@@ -69,9 +69,18 @@ services:
       REDIS_PASSWORD: ""
       APP_PORT_CORE: 8080
       JWT_SECRET: dev-secret-key-change-in-production-must-be-at-least-256-bits-long!!
-      AD_ENABLED: "false"
-      OTP_BOOTSTRAP_USERNAME: ${OTP_BOOTSTRAP_USERNAME:-superadmin}
       MOBILE_ENCRYPTION_KEY: ${MOBILE_ENCRYPTION_KEY:-ZGV2LW9ubHktMzItYnl0ZS1tb2JpbGUta2V5ISEhISE=}
+
+      # Active Directory. AD_SERVICE_PASSWORD is never written here — it comes
+      # from .env, which is gitignored. Set AD_ENABLED=false to run against
+      # local passwords only (e.g. a laptop with no route to the DC).
+      AD_ENABLED: ${AD_ENABLED:-true}
+      AD_URL: ${AD_URL:-ldaps://NICDCSrv2.nibins.com:636}
+      AD_BASE_DN: ${AD_BASE_DN:-DC=nibins,DC=com}
+      AD_SERVICE_DN: ${AD_SERVICE_DN:-CN=SMS Service,OU=ServiceAccounts,DC=nibins,DC=com}
+      AD_SERVICE_PASSWORD: ${AD_SERVICE_PASSWORD}
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy

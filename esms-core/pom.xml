@@ -108,10 +108,16 @@
             <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-ldap</artifactId>
-        </dependency> -->
+        <!--
+            In-memory LDAP server for ActiveDirectoryAuthenticatorTest. There is
+            no matching runtime dependency on purpose: the AD integration uses
+            the JDK's built-in JNDI LDAP provider. See the note in the parent pom.
+        -->
+        <dependency>
+            <groupId>com.unboundid</groupId>
+            <artifactId>unboundid-ldapsdk</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

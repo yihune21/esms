@@ -1,8 +1,10 @@
 package et.com.cog.esms.core.identity;
 
+import et.com.cog.esms.core.activeDirectory.AdAuthResult;
+import et.com.cog.esms.core.activeDirectory.ActiveDirectoryAuthenticator;
+import et.com.cog.esms.core.activeDirectory.AdUserProvisioningService;
 import et.com.cog.esms.core.audit.AuditService;
 import et.com.cog.esms.core.security.JwtTokenProvider;
-import et.com.cog.esms.core.util.PhoneNumbers;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +23,22 @@ import java.time.Instant;
 import java.util.*;
 
 
+/**
+ * Sign-in is a single step: credentials in, session out.
+ *
+ * The SMS OTP that used to sit between them is gone. eSMS is reachable only
+ * from the NIC LAN, so the second factor was protecting a door that is already
+ * behind the perimeter — while costing a live SMS per login, making the login
+ * path depend on the SMSC being up, and requiring every member of staff to have
+ * a mobile number on file before they could work.
+ *
+ * Credentials are checked against Active Directory first
+ * ({@link ActiveDirectoryAuthenticator}), with the local BCrypt hash as a
+ * fallback for accounts AD does not know about — the seeded superadmin, and any
+ * account created before the domain was wired up. See
+ * {@link AdAuthResult#mayFallBackToLocal()} for exactly when that fallback is
+ * allowed: never for an account AD knows and rejected.
+ */
 @Slf4j
 @RestController
 @RequestMapping("/auth")
@@ -28,30 +46,20 @@ import java.util.*;
 public class AuthController {
 
     private final JwtTokenProvider tokenProvider;
-    private final OtpService otpService;
     private final SessionService sessionService;
     private final LockoutService lockoutService;
     private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
     private final WorkspaceMemberRepository memberRepository;
     private final AuditService auditService;
-    private final OtpSmsService otpSmsService;
-    private final et.com.cog.esms.core.security.MobileCipher mobileCipher;
-
-    /**
-     * The single account whose OTP may be written to the server log instead of
-     * sent, and only while it still has no mobile number, so a freshly seeded
-     * deployment can be entered once to configure one. The OTP step itself is
-     * never skipped. Set to an empty value to disable this entirely.
-     */
-    @org.springframework.beans.factory.annotation.Value("${app.security.otp.bootstrap-username:superadmin}")
-    private String bootstrapAdminUsername;
+    private final ActiveDirectoryAuthenticator adAuthenticator;
+    private final AdUserProvisioningService adProvisioningService;
 
 
-
-   @PostMapping("/login")
+    @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req,
-                                   HttpServletRequest httpReq) {
+                                   HttpServletRequest httpReq,
+                                   HttpServletResponse response) {
         String ip = getClientIp(httpReq);
         if (lockoutService.isIpBlocked(ip)) {
             auditService.log(null, "AUTH", "WARN", "LOGIN_BLOCKED_IP", "User", null);
@@ -63,132 +71,107 @@ public class AuthController {
             return problem(423, "Account locked");
         }
 
-        var userOpt = userRepository.findByUsername(req.getUsername());
-        if (userOpt.isEmpty()) {
-            lockoutService.recordFailure(req.getUsername(), ip);
-            auditService.log(null, "AUTH", "WARN", "LOGIN_UNKNOWN_USERNAME", "User", null);
-            return problem(401, "Invalid credentials");
+        AdAuthResult ad = adAuthenticator.authenticate(req.getUsername(), req.getPassword());
+
+        AppUser user;
+        if (ad.status() == AdAuthResult.Status.AUTHENTICATED) {
+            // AD said yes. Create or refresh the local row that carries the
+            // workspace membership and permissions.
+            user = adProvisioningService.provision(ad.user());
+            auditService.log(null, "AUTH", "INFO", "LOGIN_AD_BIND_OK", "User", user.getId());
+
+        } else if (ad.mayFallBackToLocal()) {
+            // AD does not hold this account, is switched off, or is unreachable.
+            var localResult = authenticateLocally(req, ip);
+            if (localResult.rejection() != null) return localResult.rejection();
+            user = localResult.user();
+
+        } else if (ad.status() == AdAuthResult.Status.ACCOUNT_DISABLED) {
+            auditService.log(null, "AUTH", "WARN", "LOGIN_AD_ACCOUNT_DISABLED", "User", null);
+            return problem(423, "Your domain account is disabled or its password has expired. "
+                    + "Contact the IT department.");
+
+        } else {
+            // AD knows this account and rejected the password. Deliberately no
+            // fallback to the local hash — a stale local password must not
+            // outlive the directory's own answer.
+            boolean locked = lockoutService.recordFailure(req.getUsername(), ip);
+            auditService.log(null, "AUTH", locked ? "CRITICAL" : "WARN",
+                    locked ? "LOGIN_ACCOUNT_LOCKED_OUT" : "LOGIN_AD_BAD_PASSWORD", "User", null);
+            return locked ? problem(423, "Account locked") : problem(401, "Invalid credentials");
         }
 
-        var user = userOpt.get();
         if (!"ACTIVE".equals(user.getStatus())) {
+            // Deactivating someone in eSMS keeps them out even while their
+            // domain account stays perfectly valid.
             auditService.log(null, "AUTH", "WARN", "LOGIN_ACCOUNT_DISABLED", "User", user.getId());
             return problem(423, "Account disabled");
         }
 
-        if (user.getPasswordHash() == null ||
-            !passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
+        lockoutService.clearFailures(req.getUsername());
+        return issueSession(user.getId(), user.getUsername(), response);
+    }
+
+    /**
+     * The pre-AD path, still used for accounts the directory does not hold.
+     *
+     * @return either the authenticated user or the response to send back —
+     *         exactly one is non-null.
+     */
+    private LocalAuthOutcome authenticateLocally(LoginRequest req, String ip) {
+        var userOpt = userRepository.findByUsername(req.getUsername());
+        if (userOpt.isEmpty()) {
+            lockoutService.recordFailure(req.getUsername(), ip);
+            auditService.log(null, "AUTH", "WARN", "LOGIN_UNKNOWN_USERNAME", "User", null);
+            return LocalAuthOutcome.rejected(problem(401, "Invalid credentials"));
+        }
+
+        var user = userOpt.get();
+
+        // Once an account has bound against AD successfully, the directory owns
+        // it — and keeps owning it while the DC is unreachable. Otherwise
+        // anything that takes the domain controller off the network (including
+        // an attacker who can) would silently re-enable a local password that
+        // AD had already superseded, for every account in the system. The
+        // break-glass path is preserved: the seeded superadmin, and anything
+        // else AD has never held, has no ad_sam and still signs in here.
+        if (adAuthenticator.isEnabled() && user.getAdSam() != null) {
+            log.warn("Refusing local-password sign-in for directory account '{}' — "
+                    + "Active Directory is authoritative for it and could not be reached",
+                    user.getUsername());
+            auditService.log(null, "AUTH", "CRITICAL", "LOGIN_AD_UNREACHABLE_NO_LOCAL_FALLBACK",
+                    "User", user.getId());
+            return LocalAuthOutcome.rejected(problem(503,
+                    "Cannot reach the domain controller to verify your account. Please try again shortly."));
+        }
+
+        if (user.getPasswordHash() == null
+                || !passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
             boolean locked = lockoutService.recordFailure(req.getUsername(), ip);
             if (locked) {
                 auditService.log(null, "AUTH", "CRITICAL", "LOGIN_ACCOUNT_LOCKED_OUT", "User", user.getId());
-                return problem(423, "Account locked");
+                return LocalAuthOutcome.rejected(problem(423, "Account locked"));
             }
             auditService.log(null, "AUTH", "WARN", "LOGIN_BAD_PASSWORD", "User", user.getId());
-            return problem(401, "Invalid credentials");
+            return LocalAuthOutcome.rejected(problem(401, "Invalid credentials"));
         }
 
-        // The OTP is never logged for a normal account. It used to be written
-        // to the application log for EVERY user in place of being sent, which
-        // made every account reachable by anyone who could read logs. The one
-        // remaining exception is the first-run case below.
-        String mobile = mobileCipher.decrypt(user.getMobileEnc());
-        boolean canSms = PhoneNumbers.isValidE164(mobile);
-
-        // First-run only. The seeded administrator has no number, and a number
-        // can only be set from inside the application, so a deployment would
-        // otherwise be locked out of its own admin account. The OTP step is
-        // still enforced in full - the code is simply written to the server log
-        // instead of being sent, so whoever is standing up the system can read
-        // it there. Signing in therefore still requires server access, which a
-        // password-only bypass would not.
-        //
-        // Deliberately narrow: only the configured bootstrap username, only
-        // while that account has no number, and audited CRITICAL each time. The
-        // moment a number is saved this stops applying and the code is never
-        // logged again.
-        boolean firstRunLoggedOtp = !canSms
-                && user.getUsername().equalsIgnoreCase(bootstrapAdminUsername);
-
-        if (!canSms && !firstRunLoggedOtp) {
-            auditService.log(null, "AUTH", "CRITICAL", "LOGIN_NO_MOBILE_ON_FILE", "User", user.getId());
-            log.error("User {} has no usable mobile number on file - cannot deliver an OTP", user.getUsername());
-            return problem(409, "No mobile number is registered for this account. Contact your administrator.");
+        if (adAuthenticator.isEnabled()) {
+            // Worth seeing in the log: with AD on, every local-password login is
+            // an account the directory does not hold.
+            log.info("User '{}' signed in with a local password — no Active Directory entry",
+                    user.getUsername());
         }
-
-        String otp = otpService.generateAndStore(user.getId().toString());
-
-        if (firstRunLoggedOtp) {
-            // Format kept greppable so the documented
-            // "docker compose logs esms-core | grep -i OTP" still works.
-            log.warn("FIRST-RUN LOGIN for {} - no mobile number on file, so the code was not sent. "
-                    + "OTP={} — enter it to finish signing in, then set a mobile number from the "
-                    + "user screen. Once set, codes go by SMS and are never logged again.",
-                    user.getUsername(), otp);
-            auditService.log(null, "AUTH", "CRITICAL", "LOGIN_OTP_WRITTEN_TO_LOG_NO_MOBILE",
-                    "User", user.getId());
-        } else {
-            try {
-                otpSmsService.send(user.getId(), mobile, otp);
-            } catch (Exception e) {
-                // Do not leave a live OTP sitting in Redis for a code that was
-                // never delivered.
-                otpService.invalidate(user.getId().toString());
-                auditService.log(null, "AUTH", "CRITICAL", "LOGIN_OTP_SEND_FAILED", "User", user.getId());
-                log.error("Failed to queue the OTP SMS for user {}: {}", user.getUsername(), e.getMessage(), e);
-                return problem(503, "Could not send the verification code. Please try again.");
-            }
-        }
-
-        String preAuthToken = tokenProvider.createPreAuthToken(user.getId(), user.getUsername());
-        lockoutService.clearFailures(req.getUsername());
-
-        auditService.log(null, "AUTH", "INFO", "LOGIN_OTP_SENT", "User", user.getId());
-
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("preAuthToken", preAuthToken);
-        // Masks the real number. This used to mask mobile_hash, so it returned
-        // the last four characters of a SHA-256 digest.
-        body.put("otpSentTo", firstRunLoggedOtp
-                ? "the esms-core server log (first-run setup)"
-                : PhoneNumbers.mask(mobile));
-        body.put("otpRequired", true);
-        // Lets the UI prompt for a number once this session starts; without one
-        // the next login would fall back to the log again.
-        body.put("mobileRequired", firstRunLoggedOtp);
-        body.put("expiresIn", 180);
-        
-        return ResponseEntity.ok(body);
+        return LocalAuthOutcome.authenticated(user);
     }
 
-    @PostMapping("/verify-otp")
-    public ResponseEntity<?> verifyOtp(@Valid @RequestBody OtpRequest req,
-                                       HttpServletResponse response) {
-        Claims claims = tokenProvider.parseToken(req.getPreAuthToken());
-        if (claims == null || !"pre_auth".equals(tokenProvider.getTokenType(claims))) {
-            auditService.log(null, "AUTH", "WARN", "VERIFY_BAD_CLAIM", "User", null);
-            return problem(401, "Invalid or expired pre-auth token");
+    private record LocalAuthOutcome(AppUser user, ResponseEntity<Map<String, Object>> rejection) {
+        static LocalAuthOutcome authenticated(AppUser user) {
+            return new LocalAuthOutcome(user, null);
         }
-
-        UUID userId = tokenProvider.getUserId(claims);
-        String username = tokenProvider.getUsername(claims);
-
-        var result = otpService.verify(userId.toString(), req.getOtp());
-        return switch (result) {
-            case VALID -> issueSession(userId, username, response);
-
-            case INVALID -> {
-                auditService.log(null, "AUTH", "WARN", "OTP_INVALID", "User", userId);
-                yield problem(401, "Invalid OTP");
-            }
-            case EXPIRED -> {
-                auditService.log(null, "AUTH", "WARN", "OTP_EXPIRED", "User", userId);
-                yield problem(410, "OTP expired; restart login");
-            }
-            case MAX_ATTEMPTS -> {
-                auditService.log(null, "AUTH", "CRITICAL", "OTP_MAX_ATTEMPTS", "User", userId);
-                yield problem(410, "Maximum OTP attempts exceeded; restart login");
-            }
-        };
+        static LocalAuthOutcome rejected(ResponseEntity<Map<String, Object>> rejection) {
+            return new LocalAuthOutcome(null, rejection);
+        }
     }
 
     @PostMapping("/refresh")
@@ -277,56 +260,6 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("message", "Logged out"));
     }
 
-
-    @PostMapping("/resend-otp")
-    public ResponseEntity<?> resendOtp(@Valid @RequestBody ResendOtpRequest req) {
-        Claims claims = tokenProvider.parseToken(req.getPreAuthToken());
-        if (claims == null || !"pre_auth".equals(tokenProvider.getTokenType(claims))) {
-            auditService.log(null, "AUTH", "WARN", "RESEND_OTP_INVALID_TOKEN", "User", null);
-            return problem(401, "Invalid or expired pre-auth token");
-        }
-
-        UUID userId = tokenProvider.getUserId(claims);
-        if (!otpService.canResend(userId.toString())) {
-            auditService.log(null, "AUTH", "WARN", "RESEND_OTP_RATE_LIMITED", "User", userId);
-            return problem(429, "Please wait before requesting another OTP");
-        }
-
-        var user = userRepository.findById(userId).orElse(null);
-        String mobile = user != null ? mobileCipher.decrypt(user.getMobileEnc()) : null;
-        boolean canSms = PhoneNumbers.isValidE164(mobile);
-        // Same first-run rule as /auth/login, so "Resend OTP" keeps working
-        // during setup instead of dead-ending on a 409.
-        boolean firstRunLoggedOtp = !canSms && user != null
-                && user.getUsername().equalsIgnoreCase(bootstrapAdminUsername);
-
-        if (!canSms && !firstRunLoggedOtp) {
-            auditService.log(null, "AUTH", "CRITICAL", "RESEND_OTP_NO_MOBILE", "User", userId);
-            return problem(409, "No mobile number is registered for this account. Contact your administrator.");
-        }
-
-        String otp = otpService.generateAndStore(userId.toString());
-        if (firstRunLoggedOtp) {
-            log.warn("FIRST-RUN LOGIN for {} - resent code not sent (no mobile number on file). OTP={}",
-                    user.getUsername(), otp);
-            auditService.log(null, "AUTH", "CRITICAL", "RESEND_OTP_WRITTEN_TO_LOG_NO_MOBILE", "User", userId);
-        } else {
-            try {
-                otpSmsService.send(userId, mobile, otp);
-            } catch (Exception e) {
-                otpService.invalidate(userId.toString());
-                auditService.log(null, "AUTH", "CRITICAL", "RESEND_OTP_SEND_FAILED", "User", userId);
-                log.error("Failed to queue the resent OTP SMS for user {}: {}", userId, e.getMessage(), e);
-                return problem(503, "Could not send the verification code. Please try again.");
-            }
-        }
-        otpService.markResendCooldown(userId.toString());
-
-        auditService.log(null, "AUTH", "INFO", "OTP_RESENT", "User", userId);
-
-        return ResponseEntity.ok(Map.of("message", "OTP resent", "expiresIn", 180));
-    }
-
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> me() {
@@ -360,6 +293,9 @@ public class AuthController {
         body.put("email",       user.getEmail());
         body.put("status",      user.getStatus());
         body.put("lastLoginAt", user.getLastLoginAt());
+        // Lets the UI hide password-change controls for directory-backed
+        // accounts, whose password lives in AD and cannot be changed here.
+        body.put("directoryAccount", user.getAdSam() != null);
         body.put("workspaces",  workspaces);
         body.put("currentWorkspaceId",
                 et.com.cog.esms.core.security.WorkspaceContext.currentWorkspaceId());
@@ -423,8 +359,7 @@ public class AuthController {
 
     /**
      * Issues the access token, refresh cookie and session for a user who has
-     * cleared the OTP step.
-     *
+     * cleared authentication.
      */
     private ResponseEntity<?> issueSession(UUID userId, String username,
                                            HttpServletResponse response) {
@@ -485,6 +420,10 @@ public class AuthController {
         body.put("expiresIn", tokenProvider.getAccessTokenTtl().toSeconds());
         body.put("refreshCookieSet", true);
         body.put("workspaces", workspaces);
+        // An AD account that no administrator has placed in a workspace yet can
+        // sign in but holds no permissions. Saying so explicitly stops the UI
+        // rendering an empty dashboard with no explanation.
+        body.put("awaitingWorkspaceAssignment", workspaces.isEmpty());
         auditService.log(defaultWsId, "AUTH", "INFO", "LOGIN_SUCCESS", "User", userId);
 
         return ResponseEntity.ok(body);
@@ -506,10 +445,6 @@ public class AuthController {
         return xff != null ? xff.split(",")[0].trim() : request.getRemoteAddr();
     }
 
-    private String maskPhone(String hash) {
-        return hash != null && hash.length() > 4 ? "****" + hash.substring(hash.length() - 4) : "****";
-    }
-
     private ResponseEntity<Map<String, Object>> problem(int status, String title) {
         return ResponseEntity.status(status)
                 .header("Content-Type", "application/problem+json")
@@ -521,17 +456,6 @@ public class AuthController {
     public static class LoginRequest {
         @NotBlank private String username;
         @NotBlank private String password;
-    }
-
-    @Data
-    public static class OtpRequest {
-        @NotBlank private String preAuthToken;
-        @NotBlank private String otp;
-    }
-
-    @Data
-    public static class ResendOtpRequest {
-        @NotBlank private String preAuthToken;
     }
 
     @Data

@@ -40,6 +40,8 @@
         <opencsv.version>5.9</opencsv.version>
         <testcontainers.version>1.19.7</testcontainers.version>
         <lombok.version>1.18.46</lombok.version>
+        <!-- Not managed by spring-boot-dependencies, so pinned here. -->
+        <unboundid.version>6.0.11</unboundid.version>
     </properties>
 
     <dependencyManagement>
@@ -125,6 +127,26 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+
+            <!--
+                Active Directory needs no runtime dependency: the authenticator
+                is built on the JDK's own JNDI LDAP provider. spring-ldap-core
+                was deliberately left off the classpath — its presence activates
+                Spring Boot's LdapAutoConfiguration, which builds a SECOND
+                ContextSource from spring.ldap.* defaulting to
+                ldap://localhost:389, recreating the duplicate LDAP
+                configuration this integration set out to remove.
+
+                unboundid runs an in-memory LDAP server so ActiveDirectoryAuthenticator
+                can be tested without a domain controller.
+            -->
+            <dependency>
+                <groupId>com.unboundid</groupId>
+                <artifactId>unboundid-ldapsdk</artifactId>
+                <version>${unboundid.version}</version>
+                <scope>test</scope>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 

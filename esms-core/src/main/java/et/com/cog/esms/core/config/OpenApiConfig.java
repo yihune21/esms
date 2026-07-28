@@ -29,9 +29,13 @@ import org.springframework.context.annotation.Configuration;
             Enterprise SMS Communication Platform for Nib Insurance Company (ESCP-2026).
 
             **Authentication flow**
-            1. `POST /auth/login`      → returns `preAuthToken`
-            2. `POST /auth/verify-otp` → returns `accessToken` (+ HttpOnly refresh cookie)
-            3. Click **Authorize** above, paste the `accessToken` to enable all protected calls.
+            1. `POST /auth/login` with your Active Directory username and password
+               → returns `accessToken` (+ HttpOnly refresh cookie). Single step: the
+               platform is LAN-only, so there is no SMS OTP.
+            2. Click **Authorize** above, paste the `accessToken` to enable all protected calls.
+
+            Credentials are checked against the NIC domain controller. Accounts Active
+            Directory does not hold (the seeded `superadmin`) fall back to a local password.
 
             **DLR / Webhook callbacks** are handled by the `esms-sender` service on port **8081**.
             """,
@@ -49,7 +53,7 @@ import org.springframework.context.annotation.Configuration;
     scheme      = "bearer",
     bearerFormat = "JWT",
     in          = SecuritySchemeIn.HEADER,
-    description = "JWT access token. Obtain via POST /auth/login → POST /auth/verify-otp"
+    description = "JWT access token. Obtain via POST /auth/login"
 )
 public class OpenApiConfig {
     // No beans required — annotations are processed by springdoc at startup.

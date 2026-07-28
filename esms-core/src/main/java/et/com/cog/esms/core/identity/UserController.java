@@ -59,9 +59,9 @@ public class UserController {
                     .body(Map.of("title", "Username already exists"));
         }
 
-        // Login requires an OTP, so an account without a mobile can never sign
-        // in. The field stays optional to avoid breaking existing callers, but
-        // a bad value is rejected outright rather than stored unusable.
+        // A contact detail only — sign-in no longer sends anything to it. Still
+        // validated rather than stored unusable, because campaigns and the
+        // directory both expect E.164.
         String mobile = null;
         if (req.getMobile() != null && !req.getMobile().isBlank()) {
             mobile = PhoneNumbers.normalize(req.getMobile());
@@ -71,13 +71,20 @@ public class UserController {
             }
         }
 
+        // Optional since Active Directory arrived. Omit it for a domain account
+        // — the person authenticates against AD and has no local credential to
+        // guess or leak. Supply one only for accounts AD does not hold.
+        String passwordHash = (req.getPassword() != null && !req.getPassword().isBlank())
+                ? passwordEncoder.encode(req.getPassword())
+                : null;
+
         AppUser user = AppUser.builder()
                 .username(req.getUsername())
                 .displayName(req.getDisplayName())
                 .email(req.getEmail())
                 .mobileEnc(mobileCipher.encrypt(mobile))
                 .mobileHash(mobileCipher.hash(mobile))
-                .passwordHash(passwordEncoder.encode(req.getPassword()))
+                .passwordHash(passwordHash)
                 .status("ACTIVE")
                 .failedLogins((short) 0)
                 .build();
@@ -229,7 +236,7 @@ public class UserController {
         private String  primaryRole;
         private String  primaryWorkspace;
         private String  division;
-        // Never the number itself - just whether the account can receive an OTP.
+        // Never the number itself - just whether one is on file.
         private boolean hasMobile;
         private List<MembershipDto> memberships;
     }
@@ -248,8 +255,9 @@ public class UserController {
         @NotBlank private String username;
         @NotBlank private String displayName;
         private String email;
-        @NotBlank private String password;
-        // Optional, but an account without one can never complete OTP login.
+        // Optional. Leave it out for a domain account — that person signs in
+        // against Active Directory. Set it only for accounts AD does not hold.
+        private String password;
         private String mobile;
     }
 }
